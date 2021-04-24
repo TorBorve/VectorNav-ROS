@@ -41,7 +41,9 @@ add_subdirectory(vnproglib-1.1.5.0/cpp)
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-include_directories(vnproglib-1.1.5.0/cpp/include ${catkin_INCLUDE_DIRS})
+include_directories(vnproglib-1.1.5.0/cpp/include 
+    include
+    ${catkin_INCLUDE_DIRS})
 
 ## Declare a cpp library
 ## Declare a cpp executable
@@ -60,3 +62,8 @@ install(TARGETS vnpub
    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+
+## Declare vn300 executable
+add_executable(vn300 src/vn300.cpp src/VnROS.cpp)
+add_dependencies(vn300 ${PROJECT_NAME}_generate_messages)
+target_link_libraries(vn300 libvncxx ${catkin_LIBRARIES})

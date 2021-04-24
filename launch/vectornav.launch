@@ -6,7 +6,7 @@
 	<node pkg="vectornav" type="vnpub" name="vectornav" output="screen" >
 	  <param name="frame_id" value="$(arg frame_id)"/>
 	  <param name="map_frame_id" value="$(arg map_frame_id)"/>
-      <rosparam command="load" file="$(find vectornav)/params/vn300_ff.yaml" />
+      <rosparam command="load" file="$(find vectornav)/params/vn300.yaml" />
 	</node>	
 	
 </launch>
