@@ -1,6 +1,7 @@
 #include "VnROS.h"
 
 #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/TransformStamped.h>
 
 void callBackVectornav(void* userData, Packet& p, size_t index){
     static_cast<VnROS*>(userData)->callback(p, index);
@@ -10,6 +11,7 @@ void callBackVectornav(void* userData, Packet& p, size_t index){
 VnROS::VnROS(VnParams param) : params{param} {
     ros::NodeHandle nh;
     odomPub = nh.advertise<nav_msgs::Odometry>("vectornav/Odom", 100);
+    tfTimer = nh.createTimer(ros::Duration(1.0/params.asyncOutputRate), &VnROS::broadcastTf, this);
 }
 
 void VnROS::connect(){
@@ -60,29 +62,29 @@ void VnROS::connect(){
 
     BinaryOutputRegister bor(
         ASYNCMODE_PORT1,
-            params.sensorImuRate / params.asyncOutputRate,  // update rate [ms]
-            COMMONGROUP_QUATERNION
-            | COMMONGROUP_YAWPITCHROLL
-            | COMMONGROUP_ANGULARRATE
-            | COMMONGROUP_POSITION
-            | COMMONGROUP_ACCEL
-            | COMMONGROUP_MAGPRES,
-            TIMEGROUP_NONE
-            | TIMEGROUP_GPSTOW
-            | TIMEGROUP_GPSWEEK
-            | TIMEGROUP_TIMEUTC,
-            IMUGROUP_NONE,
-            GPSGROUP_NONE,
-            ATTITUDEGROUP_YPRU, //<-- returning yaw pitch roll uncertainties
-            INSGROUP_INSSTATUS
-            | INSGROUP_POSLLA
-            | INSGROUP_POSECEF
-            | INSGROUP_VELBODY
-            | INSGROUP_ACCELECEF
-            | INSGROUP_VELNED
-            | INSGROUP_POSU
-            | INSGROUP_VELU,
-            GPSGROUP_NONE
+        params.sensorImuRate / params.asyncOutputRate,  // update rate [ms]
+        COMMONGROUP_QUATERNION
+        | COMMONGROUP_YAWPITCHROLL
+        | COMMONGROUP_ANGULARRATE
+        | COMMONGROUP_POSITION
+        | COMMONGROUP_ACCEL
+        | COMMONGROUP_MAGPRES,
+        TIMEGROUP_NONE
+        | TIMEGROUP_GPSTOW
+        | TIMEGROUP_GPSWEEK
+        | TIMEGROUP_TIMEUTC,
+        IMUGROUP_NONE,
+        GPSGROUP_NONE,
+        ATTITUDEGROUP_YPRU, //<-- returning yaw pitch roll uncertainties
+        INSGROUP_INSSTATUS
+        | INSGROUP_POSLLA
+        | INSGROUP_POSECEF
+        | INSGROUP_VELBODY
+        | INSGROUP_ACCELECEF
+        | INSGROUP_VELNED
+        | INSGROUP_POSU
+        | INSGROUP_VELU,
+        GPSGROUP_NONE
     );
 
     vnSensor.writeBinaryOutput1(bor);
@@ -92,17 +94,15 @@ void VnROS::connect(){
 }
 
 void VnROS::callback(Packet& p, size_t index){
-    ROS_INFO("In callback");
     vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
     pubOdom(cd);
 }
 
 void VnROS::pubOdom(CompositeData& cd){
     // return if no subscribers to topic
-    if (odomPub.getNumSubscribers() == 0){
-        return;
-    }
-    nav_msgs::Odometry odomMsg;
+    // if (odomPub.getNumSubscribers() == 0){
+    //     return;
+    // }
     odomMsg.header.stamp = ros::Time::now();
     odomMsg.child_frame_id = params.frameId;
     odomMsg.header.frame_id = params.mapFrameId;
@@ -138,6 +138,25 @@ void VnROS::pubOdom(CompositeData& cd){
         odomMsg.twist.twist.angular.z = ar[2];
     }
     odomPub.publish(odomMsg);
+    return;
+}
+
+void VnROS::broadcastTf(const ros::TimerEvent& event){
+    // return if no data recived after startup.
+    if (!initialPositonSet){return;}
+    geometry_msgs::TransformStamped transform;
+    transform.header.frame_id = params.mapFrameId;
+    transform.header.stamp = event.current_real;
+    transform.child_frame_id = params.frameId;
+    transform.transform.translation.x = odomMsg.pose.pose.position.x;
+    transform.transform.translation.y = odomMsg.pose.pose.position.y;
+    transform.transform.translation.z = odomMsg.pose.pose.position.z;
+    transform.transform.rotation.x = odomMsg.pose.pose.orientation.x;
+    transform.transform.rotation.y = odomMsg.pose.pose.orientation.y;
+    transform.transform.rotation.z = odomMsg.pose.pose.orientation.z;
+    transform.transform.rotation.w = odomMsg.pose.pose.orientation.w;
+    br.sendTransform(transform);
+    return;
 }
 
 VnROS::~VnROS(){

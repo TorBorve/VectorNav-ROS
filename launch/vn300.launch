@@ -1,6 +1,9 @@
 <?xml version="1.0"?>
 <launch>
+    <!-- launch vectornav script with params -->
     <node pkg="vectornav" type="vn300" name="vectornav" output="screen">
         <rosparam command="load" file="$(find vectornav)/params/vn300.yaml" />
     </node>
+    <!-- launch rviz -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find vectornav)/rviz/vn300.rviz" />
 </launch>

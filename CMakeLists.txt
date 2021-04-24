@@ -9,6 +9,8 @@ project(vectornav)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
     roscpp
+    tf2 
+    tf2_ros
     message_generation
 )
 

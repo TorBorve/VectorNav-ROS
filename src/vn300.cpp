@@ -24,44 +24,13 @@
  */
 
 #include <iostream>
-#include <cmath>
-// No need to define PI twice if we already have it included...
-//#define M_PI 3.14159265358979323846  /* M_PI */
 
 // ROS Libraries
 #include "ros/ros.h"
-#include "sensor_msgs/Imu.h"
-#include "sensor_msgs/MagneticField.h"
-#include "sensor_msgs/NavSatFix.h"
-#include "nav_msgs/Odometry.h"
-#include "sensor_msgs/Temperature.h"
-#include "sensor_msgs/FluidPressure.h"
-#include "std_srvs/Empty.h"
-#include <tf2/LinearMath/Transform.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <vectornav/Ins.h>
-
-
-ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
-ros::ServiceServer resetOdomSrv;
-
-// Custom user data to pass to packet callback function
-struct UserData {
-    int device_family;
-};
-
-// Include this header file to get access to VectorNav sensors.
-#include "vn/sensors.h"
-#include "vn/compositedata.h"
-#include "vn/util.h"
 
 #include "VnROS.h"
 
 using namespace std;
-using namespace vn::math;
-using namespace vn::sensors;
-using namespace vn::protocol::uart;
-using namespace vn::xplat;
 
 // Basic loop so we can initilize our covariance parameters above
 boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
@@ -84,7 +53,6 @@ int main(int argc, char *argv[])
 
     // ROS node init
     ros::init(argc, argv, "vectornav");
-    ros::NodeHandle n;
     ros::NodeHandle pn("~");
 
     VnParams params;
@@ -113,7 +81,7 @@ int main(int argc, char *argv[])
         params.orientationCovariance = setCov(rpc_temp);
     }
 
-    VnROS vnROS(params);
+    VnROS vnROS{params};
     vnROS.connect();
     
     ros::spin(); 
