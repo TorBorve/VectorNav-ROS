@@ -16,6 +16,9 @@ fixed_imu_rate: 800
 # Frame id to publish data in
 frame_id: vectornav
 
+# Frame id for map / odom
+map_frame_id: vectornav_map
+
 # Data publication form, true for East North Up or false for North East Down <- false is default setting
 tf_ned_to_enu: false
 
