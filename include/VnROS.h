@@ -40,6 +40,7 @@ public:
     ~VnROS();
 private:
     void pubOdom(CompositeData& cd);
+    void pubImu(CompositeData& cd);
     void broadcastTf(const ros::TimerEvent& event);
     // sensor
     vn::sensors::VnSensor vnSensor;

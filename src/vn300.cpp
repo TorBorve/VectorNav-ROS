@@ -80,7 +80,6 @@ int main(int argc, char *argv[])
     {
         params.orientationCovariance = setCov(rpc_temp);
     }
-
     VnROS vnROS{params};
     vnROS.connect();
     
