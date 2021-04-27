@@ -1,6 +1,8 @@
 Vectornav ROS Driver
 ====================
 
+**[To do-list at the bottom](#to-do-list)**
+
 A ROS node for VectorNav INS & GPS devices.
 
 This package provides a sensor_msg interface for the VN100, 200, & 300 
@@ -81,5 +83,10 @@ References
 [2]: http://wiki.ros.org/ROS/Tutorials/InstallingandConfiguringROSEnvironment "ROS Workspace Tutorial"
 
 
+To do-list
+===========
 
-
+- [ ] Add IMU topic
+- [ ] Create function to set ENU flag
+- [ ] Implement antenna layout setting (`VnSensor::writeGpsAntennaOffset`, `VnSensor::writeGpsCompassBaseline`)
+- [ ] TF + SLAM harmony
