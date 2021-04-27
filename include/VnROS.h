@@ -47,6 +47,7 @@ private:
     
     // publishers
     ros::Publisher odomPub;
+    ros::Publisher imuPub;
 
     // params
     VnParams params;

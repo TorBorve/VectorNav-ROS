@@ -6,6 +6,10 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+#include <chrono>
+#include <thread>
+
+// initial callback from vectornav. userData is a pointer to our class.
 void callBackVectornav(void* userData, Packet& p, size_t index){
     static_cast<VnROS*>(userData)->callback(p, index);
     return;
@@ -14,8 +18,13 @@ void callBackVectornav(void* userData, Packet& p, size_t index){
 VnROS::VnROS(VnParams param) : params{param} {
     ros::NodeHandle nh;
     odomPub = nh.advertise<nav_msgs::Odometry>("vectornav/Odom", 100);
+    imuPub = nh.advertise<sensor_msgs::Imu>("vectornav/Imu", 100);
     tfTimer = nh.createTimer(ros::Duration(1.0/params.asyncOutputRate), &VnROS::broadcastTf, this);
     ROS_INFO("VnROS initialized");
+    // fix invalid quaterinon [0, 0, 0, 0]
+    odomMsg.pose.pose.orientation.w = 1;
+    odomMsg.child_frame_id = params.frameId;
+    odomMsg.header.frame_id = params.mapFrameId;
 }
 
 void VnROS::connect(){
@@ -66,7 +75,7 @@ void VnROS::connect(){
 
     BinaryOutputRegister bor(
 		ASYNCMODE_PORT1,
-		1000 / 200,
+		params.sensorImuRate / params.asyncOutputRate,
 		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION,	// Note use of binary OR to configure flags.
 		TIMEGROUP_NONE,
 		IMUGROUP_NONE,
@@ -84,17 +93,12 @@ void VnROS::connect(){
 void VnROS::callback(Packet& p, size_t index){
     vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
     pubOdom(cd);
+    pubImu(cd);
+    return;
 }
 
 void VnROS::pubOdom(CompositeData& cd){
-    // return if no subscribers to topic
-    // if (odomPub.getNumSubscribers() == 0){
-    //     return;
-    // }
     odomMsg.header.stamp = ros::Time::now();
-    odomMsg.child_frame_id = params.frameId;
-    odomMsg.header.frame_id = params.mapFrameId;
-
     if (cd.hasPositionEstimatedEcef()){
         vec3d pos = cd.positionEstimatedEcef();
 
@@ -120,10 +124,6 @@ void VnROS::pubOdom(CompositeData& cd){
         tf2_quat = tf2_quat * q2;
         geometry_msgs::Quaternion quat_msg = tf2::toMsg(tf2_quat);
         odomMsg.pose.pose.orientation = quat_msg;
-        // odomMsg.pose.pose.orientation.x = q[0];
-        // odomMsg.pose.pose.orientation.y = q[1];
-        // odomMsg.pose.pose.orientation.z = q[2];
-        // odomMsg.pose.pose.orientation.w = q[3];
     }
     if (cd.hasVelocityEstimatedBody()){
         vec3f vel = cd.velocityEstimatedBody();
@@ -142,6 +142,10 @@ void VnROS::pubOdom(CompositeData& cd){
 }
 
 void VnROS::pubImu(CompositeData& cd){
+    // return if no subsribers
+    if (imuPub.getNumSubscribers() == 0){
+        return;
+    }
     sensor_msgs::Imu imuMsg;
     imuMsg.header.frame_id = params.frameId;
     imuMsg.header.stamp = ros::Time::now();
@@ -152,10 +156,11 @@ void VnROS::pubImu(CompositeData& cd){
         imuMsg.orientation.z = quat[2];
         imuMsg.orientation.w = quat[3];
     } else {
-        // fix invalid quaternion;
+        // fix invalid quaternion
         imuMsg.orientation.w = 1;
     }
     if (cd.hasAttitudeUncertainty()){
+        // large uncertainty on startup
         vec3f orientationStdDev = cd.attitudeUncertainty();
         imuMsg.orientation_covariance[0] = orientationStdDev[2]*orientationStdDev[2]*M_PI/180; // Convert to radians pitch
         imuMsg.orientation_covariance[4] = orientationStdDev[1]*orientationStdDev[1]*M_PI/180; // Convert to radians Roll
@@ -167,19 +172,19 @@ void VnROS::pubImu(CompositeData& cd){
         imuMsg.angular_velocity.y = ar[1];
         imuMsg.angular_velocity.z = ar[2];
     }
-    // if ()
     if (cd.hasAcceleration()){
         vec3f al = cd.acceleration();
         imuMsg.linear_acceleration.x = al[0];
         imuMsg.linear_acceleration.y = al[1];
         imuMsg.linear_acceleration.z = al[2];
     }
-    // imuPub.publish(imuMsg);
+    imuMsg.angular_velocity_covariance = params.angularVelCovariance;
+    imuMsg.linear_acceleration_covariance = params.linearAccelCovariance;
+    imuPub.publish(imuMsg);
+    return;
 }
 
 void VnROS::broadcastTf(const ros::TimerEvent& event){
-    // return if no data recived after startup.
-    if (!initialPositonSet){return;}
     geometry_msgs::TransformStamped transform;
     transform.header.frame_id = params.mapFrameId;
     transform.header.stamp = event.current_real;
