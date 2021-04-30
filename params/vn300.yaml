@@ -20,14 +20,13 @@ frame_id: vectornav
 map_frame_id: vectornav_map
 
 # Data publication form, true for East North Up or false for North East Down <- false is default setting
-tf_ned_to_enu: false
+ned_to_enu: true
 
-# If publishing ENU, do we want to publish in the frame labeled on the device? Default is false.
-# If tf_ned_to_enu = true and frame_based_enu = false orientation is reported by: x->y y->x z->-z to rotate the quaternion
-# Proper method is to rotate the quaternion by multiplication
-# If tf_ned_to_enu = true and frame_based_enu = true we rotate the quaternion to the frame matched label by multiplication
-frame_based_enu: false
+# basline is the vector from antenna A to antenna B. This need to be in the ins refrence frame.
+baseline: [1.0, 0.0, 0.0]
 
+# Antenna offset is the vector from the ins to antenna A.
+antenna_offset: [0.0, 0.0, 0.0]
 # Make sure all covariances below are of type xx.xx , i.e. double so that the rpc is parsed correctly
 
 # Linear Acceleration Covariances not produced by the sensor

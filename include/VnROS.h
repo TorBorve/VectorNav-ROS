@@ -24,18 +24,18 @@ public:
     boost::array<double, 9ul> orientationCovariance;
     std::string mapFrameId;
     std::string frameId;
-    bool tfNedToEnu;
-    bool frameBasedEnu;
-    std::string sensorPort;
-    int sensorBaudRate;
-    int asyncOutputRate;
-    int sensorImuRate;
+    bool nedToEnu;
+    //std::string sensorPort;
+    //int sensorBaudRate;
+    //int asyncOutputRate;
+    //int sensorImuRate;
 };
 
 class VnROS {
 public:
-    VnROS(VnParams param);
+    VnROS(ros::NodeHandle* pn);
     void connect();
+    void disconnect();
     void callback(Packet& p, size_t index);
     ~VnROS();
 private:
@@ -44,6 +44,9 @@ private:
     void broadcastTf(const ros::TimerEvent& event);
     // sensor
     vn::sensors::VnSensor vnSensor;
+
+    // Nodehandle to get params
+    ros::NodeHandle* pn;
     
     // publishers
     ros::Publisher odomPub;

@@ -1,4 +1,5 @@
 #include "VnROS.h"
+#include "matVecMult.h"
 
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -15,11 +16,45 @@ void callBackVectornav(void* userData, Packet& p, size_t index){
     return;
 }
 
-VnROS::VnROS(VnParams param) : params{param} {
+// Basic loop so we can initilize our covariance parameters
+boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
+    // Output covariance vector
+    boost::array<double, 9ul> output = { 0.0 };
+
+    // Convert the RPC message to array
+    ROS_ASSERT(rpc.getType() == XmlRpc::XmlRpcValue::TypeArray);
+
+    for(int i = 0; i < 9; i++){
+        ROS_ASSERT(rpc[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
+        output[i] = (double)rpc[i];
+    }
+    return output;
+}
+
+VnROS::VnROS(ros::NodeHandle* pn) : pn{pn} {
+    // Load all params
+    pn->param<std::string>("map_frame_id", params.mapFrameId, "map");
+    pn->param<std::string>("frame_id", params.frameId, "vectornav");
+    pn->param<bool>("tf_ned_to_enu", params.nedToEnu, false);
+
+    //Call to set covariances
+    XmlRpc::XmlRpcValue rpc_temp;
+    if(pn->getParam("linear_accel_covariance",rpc_temp)){
+        params.linearAccelCovariance = setCov(rpc_temp);
+    }
+    if(pn->getParam("angular_vel_covariance",rpc_temp)){
+        params.angularVelCovariance = setCov(rpc_temp);
+    }
+    if(pn->getParam("orientation_covariance",rpc_temp)){
+        params.orientationCovariance = setCov(rpc_temp);
+    }
+    int asyncOutputRate;
+    pn->param<int>("async_output_rate", asyncOutputRate, 40);
+
     ros::NodeHandle nh;
     odomPub = nh.advertise<nav_msgs::Odometry>("vectornav/Odom", 100);
     imuPub = nh.advertise<sensor_msgs::Imu>("vectornav/Imu", 100);
-    tfTimer = nh.createTimer(ros::Duration(1.0/params.asyncOutputRate), &VnROS::broadcastTf, this);
+    tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnROS::broadcastTf, this);
     ROS_INFO("VnROS initialized");
     // fix invalid quaterinon [0, 0, 0, 0]
     odomMsg.pose.pose.orientation.w = 1;
@@ -28,7 +63,36 @@ VnROS::VnROS(VnParams param) : params{param} {
 }
 
 void VnROS::connect(){
-    ROS_INFO("Connecting to: %s @ %d Baud", params.sensorPort.c_str(), params.sensorBaudRate);
+    // parameters for connection
+    std::string sensorPort;
+    int sensorBaudRate;
+    int asyncOutputRate;
+    int sensorImuRate;
+    GpsCompassBaselineRegister baseline;
+    vec3f antennaOffset;
+    bool nedToEnu;
+    // get parameters from nodehandle
+    pn->param<std::string>("serial_port", sensorPort, "/dev/ttyUSB0");
+    pn->param<int>("serial_baud", sensorBaudRate, 115200);
+    pn->param<int>("async_output_rate", asyncOutputRate, 40);
+    pn->param<int>("fixed_imu_rate", sensorImuRate, 400);
+    // load vector parameters into tempVec
+    vector<float> tempVec;
+    pn->param("baseline", tempVec, {1, 0, 0});
+    ROS_ASSERT(tempVec.size() == 3);
+    baseline.position[0] = tempVec[0];
+    baseline.position[1] = tempVec[1];
+    baseline.position[2] = tempVec[2];
+    pn->param("antenna_offset", tempVec, {0, 0, 0});
+    ROS_ASSERT(tempVec.size() == 3);
+    antennaOffset[0] = tempVec[0];
+    antennaOffset[1] = tempVec[1];
+    antennaOffset[2] = tempVec[2];
+    pn->param("ned_to_enu", nedToEnu, false);
+    ROS_INFO("Baseline: {%f, %f, %f}", baseline.position[0], baseline.position[1], baseline.position[2]);
+    ROS_INFO("Antenna offset: {%f, %f, %f}", antennaOffset[0], antennaOffset[1], antennaOffset[2]);
+
+    ROS_INFO("Connecting to: %s @ %d Baud", sensorPort.c_str(), sensorBaudRate);
     int defaultBaudRate;
     bool connected = false;
     while(!connected){
@@ -38,9 +102,9 @@ void VnROS::connect(){
         vnSensor.setResponseTimeoutMs(1000);
         vnSensor.setRetransmitDelayMs(50);
         try{
-            if (defaultBaudRate != 128000 && params.sensorBaudRate != 128000){
-                vnSensor.connect(params.sensorPort, defaultBaudRate);
-                vnSensor.changeBaudRate(params.sensorBaudRate);
+            if (defaultBaudRate != 128000 && sensorBaudRate != 128000){
+                vnSensor.connect(sensorPort, defaultBaudRate);
+                vnSensor.changeBaudRate(sensorBaudRate);
                 
                 connected = true;
                 ROS_INFO("Connected baud rate is %d", vnSensor.baudrate());
@@ -71,11 +135,11 @@ void VnROS::connect(){
     ROS_INFO("Model Number: %s, Firmware Version: %s", mn.c_str(), fv.c_str());
     ROS_INFO("Hardware Revision : %d, Serial Number : %d", hv, sn);
 
-    vnSensor.writeAsyncDataOutputFrequency(params.asyncOutputRate);
+    vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
 
     BinaryOutputRegister bor(
 		ASYNCMODE_PORT1,
-		params.sensorImuRate / params.asyncOutputRate,
+		sensorImuRate / asyncOutputRate,
 		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION,	// Note use of binary OR to configure flags.
 		TIMEGROUP_NONE,
 		IMUGROUP_NONE,
@@ -86,8 +150,25 @@ void VnROS::connect(){
 
     vnSensor.writeBinaryOutput1(bor);
     // Set Data output Freq [Hz]
-    vnSensor.writeAsyncDataOutputFrequency(params.asyncOutputRate);
+    vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
+    mat3f rotation = mat3f::identity();
+    if (nedToEnu){
+        rotation = {{0, 1, 0}, 
+                    {1, 0, 0}, 
+                    {0,0, -1}};
+    }
+    baseline.position = rotation * baseline.position;
+    antennaOffset = rotation * antennaOffset;
+    // write baseline.
+    vnSensor.writeGpsCompassBaseline(baseline);
+    // write antenna offset
+    vnSensor.writeGpsAntennaOffset(antennaOffset);
+    // write reference frame / mounting of sensor
+    vnSensor.writeReferenceFrameRotation(rotation);
+
+    // register callback function
     vnSensor.registerAsyncPacketReceivedHandler(this, callBackVectornav);
+    return;
 }
 
 void VnROS::callback(Packet& p, size_t index){
@@ -115,13 +196,13 @@ void VnROS::pubOdom(CompositeData& cd){
 
     if (cd.hasQuaternion()){
         vec4f q = cd.quaternion();
-        tf2::Quaternion tf2_quat(q[0], q[1], q[2], q[3]);
+        tf2::Quaternion tf2_quat(q[1], q[0], -q[2], q[3]);
         // Create a rotation from NED -> ENU
-        tf2::Quaternion q_rotate;
-        q_rotate.setRPY(M_PI, 0.0, M_PI/2);
-        tf2_quat = q_rotate * tf2_quat;
-        tf2::Quaternion q2(sqrt(2)/2, sqrt(2)/2, 0, 0);
-        tf2_quat = tf2_quat * q2;
+        // tf2::Quaternion q_rotate;
+        // q_rotate.setRPY(M_PI, 0.0, M_PI/2);
+        // tf2_quat = q_rotate * tf2_quat;
+        // tf2::Quaternion q2(sqrt(2)/2, sqrt(2)/2, 0, 0);
+        // tf2_quat = tf2_quat * q2;
         geometry_msgs::Quaternion quat_msg = tf2::toMsg(tf2_quat);
         odomMsg.pose.pose.orientation = quat_msg;
     }
@@ -200,12 +281,21 @@ void VnROS::broadcastTf(const ros::TimerEvent& event){
     return;
 }
 
+void VnROS::disconnect(){
+    vnSensor.unregisterAsyncPacketReceivedHandler();
+    vnSensor.disconnect();
+    return;
+}
+
 VnROS::~VnROS(){
     // Node has been terminated
-    vnSensor.unregisterAsyncPacketReceivedHandler();
-    ros::Duration(0.5).sleep();
-    ROS_INFO ("Unregisted the Packet Received Handler");
-    vnSensor.disconnect();
-    ros::Duration(0.5).sleep();
-    ROS_INFO ("%s is disconnected successfully", vnSensor.readModelNumber().c_str());
+    // check if sensor is connected
+    if (vnSensor.verifySensorConnectivity()){
+        vnSensor.unregisterAsyncPacketReceivedHandler();
+        ros::Duration(0.5).sleep();
+        ROS_INFO ("Unregisted the Packet Received Handler");
+        vnSensor.disconnect();
+        ros::Duration(0.5).sleep();
+        ROS_INFO ("%s is disconnected successfully", vnSensor.readModelNumber().c_str());
+    }
 }

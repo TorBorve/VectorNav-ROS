@@ -32,57 +32,15 @@
 
 using namespace std;
 
-// Basic loop so we can initilize our covariance parameters above
-boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
-    // Output covariance vector
-    boost::array<double, 9ul> output = { 0.0 };
-
-    // Convert the RPC message to array
-    ROS_ASSERT(rpc.getType() == XmlRpc::XmlRpcValue::TypeArray);
-
-    for(int i = 0; i < 9; i++){
-        ROS_ASSERT(rpc[i].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-        output[i] = (double)rpc[i];
-    }
-    return output;
-}
-
-
 int main(int argc, char *argv[])
 {
 
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");
-
-    VnParams params;
-    // Load all params
-    pn.param<std::string>("map_frame_id", params.mapFrameId, "map");
-    pn.param<std::string>("frame_id", params.frameId, "vectornav");
-    pn.param<bool>("tf_ned_to_enu", params.tfNedToEnu, false);
-    pn.param<bool>("frame_based_enu", params.frameBasedEnu, false);
-    pn.param<int>("async_output_rate", params.asyncOutputRate, 40);
-    pn.param<std::string>("serial_port", params.sensorPort, "/dev/ttyUSB0");
-    pn.param<int>("serial_baud", params.sensorBaudRate, 115200);
-    pn.param<int>("fixed_imu_rate", params.sensorImuRate, 800);
-
-    //Call to set covariances
-    XmlRpc::XmlRpcValue rpc_temp;
-    if(pn.getParam("linear_accel_covariance",rpc_temp))
-    {
-        params.linearAccelCovariance = setCov(rpc_temp);
-    }
-    if(pn.getParam("angular_vel_covariance",rpc_temp))
-    {
-        params.angularVelCovariance = setCov(rpc_temp);
-    }
-    if(pn.getParam("orientation_covariance",rpc_temp))
-    {
-        params.orientationCovariance = setCov(rpc_temp);
-    }
-    VnROS vnROS{params};
+    VnROS vnROS{&pn};
     vnROS.connect();
-    
+
     ros::spin(); 
     return 0;
 }
