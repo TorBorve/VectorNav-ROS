@@ -42,6 +42,10 @@ private:
     void pubOdom(CompositeData& cd);
     void pubImu(CompositeData& cd);
     void broadcastTf(const ros::TimerEvent& event);
+    void writeSettings();
+    void getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
+                    vec3f& antennaOffset, bool& nedToEnu, int& baudRate);
+    void printSettings();
     // sensor
     vn::sensors::VnSensor vnSensor;
 

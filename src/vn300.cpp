@@ -25,8 +25,7 @@
 
 #include <iostream>
 
-// ROS Libraries
-#include "ros/ros.h"
+#include <ros/ros.h>
 
 #include "VnROS.h"
 
@@ -34,7 +33,6 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
-
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");

@@ -7,8 +7,7 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <chrono>
-#include <thread>
+#include <list>
 
 // initial callback from vectornav. userData is a pointer to our class.
 void callBackVectornav(void* userData, Packet& p, size_t index){
@@ -66,56 +65,27 @@ void VnROS::connect(){
     // parameters for connection
     std::string sensorPort;
     int sensorBaudRate;
-    int asyncOutputRate;
-    int sensorImuRate;
-    GpsCompassBaselineRegister baseline;
-    vec3f antennaOffset;
-    bool nedToEnu;
+
     // get parameters from nodehandle
     pn->param<std::string>("serial_port", sensorPort, "/dev/ttyUSB0");
     pn->param<int>("serial_baud", sensorBaudRate, 115200);
-    pn->param<int>("async_output_rate", asyncOutputRate, 40);
-    pn->param<int>("fixed_imu_rate", sensorImuRate, 400);
-    // load vector parameters into tempVec
-    vector<float> tempVec;
-    pn->param("baseline", tempVec, {1, 0, 0});
-    ROS_ASSERT(tempVec.size() == 3);
-    baseline.position[0] = tempVec[0];
-    baseline.position[1] = tempVec[1];
-    baseline.position[2] = tempVec[2];
-    pn->param("antenna_offset", tempVec, {0, 0, 0});
-    ROS_ASSERT(tempVec.size() == 3);
-    antennaOffset[0] = tempVec[0];
-    antennaOffset[1] = tempVec[1];
-    antennaOffset[2] = tempVec[2];
-    pn->param("ned_to_enu", nedToEnu, false);
-    ROS_INFO("Baseline: {%f, %f, %f}", baseline.position[0], baseline.position[1], baseline.position[2]);
-    ROS_INFO("Antenna offset: {%f, %f, %f}", antennaOffset[0], antennaOffset[1], antennaOffset[2]);
 
     ROS_INFO("Connecting to: %s @ %d Baud", sensorPort.c_str(), sensorBaudRate);
-    int defaultBaudRate;
-    bool connected = false;
-    while(!connected){
-        static int i = vnSensor.supportedBaudrates().size() - 1;
-        defaultBaudRate = vnSensor.supportedBaudrates()[i];
-        ROS_INFO("Connecting with default at %d", defaultBaudRate);
-        vnSensor.setResponseTimeoutMs(1000);
-        vnSensor.setRetransmitDelayMs(50);
-        try{
-            if (defaultBaudRate != 128000 && sensorBaudRate != 128000){
-                vnSensor.connect(sensorPort, defaultBaudRate);
-                vnSensor.changeBaudRate(sensorBaudRate);
-                
-                connected = true;
-                ROS_INFO("Connected baud rate is %d", vnSensor.baudrate());
-            }
-        } catch(...){
-            // disconnect could throw exception if no sensor connected
-            vnSensor.disconnect();
-            ros::Duration(0.2).sleep();
-        }
-        i--;
-        if (i < 0) {break;}
+
+    vnSensor.setResponseTimeoutMs(1000);
+    vnSensor.setRetransmitDelayMs(50);
+    // prioritize connecting to sensorBaudrate and defuault baudrate
+    list<uint32_t> baudrateQueue = {(uint32_t)sensorBaudRate, 115200};
+    for (const auto& baudrate : vnSensor.supportedBaudrates()) { baudrateQueue.push_back(baudrate);}
+    for (const auto& baudrate : baudrateQueue){
+        ROS_INFO("Connecting with baudrate: %d", baudrate);
+        try {
+            vnSensor.connect(sensorPort, baudrate);
+            // vnSensor.changeBaudRate(sensorBaudRate);
+            // // break when connected successfully
+            // break;
+        } catch (...){ }
+        if (vnSensor.verifySensorConnectivity()){break;}
     }
     if (vnSensor.verifySensorConnectivity()){
         ROS_INFO("Device connection established");
@@ -127,45 +97,8 @@ void VnROS::connect(){
         throw runtime_error("could not connect too sensor");
     }
 
-    // Query the sensor's model number.
-    string mn = vnSensor.readModelNumber();
-    string fv = vnSensor.readFirmwareVersion();
-    uint32_t hv = vnSensor.readHardwareRevision();
-    uint32_t sn = vnSensor.readSerialNumber();
-    ROS_INFO("Model Number: %s, Firmware Version: %s", mn.c_str(), fv.c_str());
-    ROS_INFO("Hardware Revision : %d, Serial Number : %d", hv, sn);
-
-    vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
-
-    BinaryOutputRegister bor(
-		ASYNCMODE_PORT1,
-		sensorImuRate / asyncOutputRate,
-		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION,	// Note use of binary OR to configure flags.
-		TIMEGROUP_NONE,
-		IMUGROUP_NONE,
-        GPSGROUP_NONE,
-		ATTITUDEGROUP_NONE,
-		INSGROUP_NONE | INSGROUP_POSECEF,
-        GPSGROUP_NONE);
-
-    vnSensor.writeBinaryOutput1(bor);
-    // Set Data output Freq [Hz]
-    vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
-    mat3f rotation = mat3f::identity();
-    if (nedToEnu){
-        rotation = {{0, 1, 0}, 
-                    {1, 0, 0}, 
-                    {0,0, -1}};
-    }
-    baseline.position = rotation * baseline.position;
-    antennaOffset = rotation * antennaOffset;
-    // write baseline.
-    vnSensor.writeGpsCompassBaseline(baseline);
-    // write antenna offset
-    vnSensor.writeGpsAntennaOffset(antennaOffset);
-    // write reference frame / mounting of sensor
-    vnSensor.writeReferenceFrameRotation(rotation);
-
+    writeSettings();
+    printSettings();
     // register callback function
     vnSensor.registerAsyncPacketReceivedHandler(this, callBackVectornav);
     return;
@@ -278,6 +211,86 @@ void VnROS::broadcastTf(const ros::TimerEvent& event){
     transform.transform.rotation.z = odomMsg.pose.pose.orientation.z;
     transform.transform.rotation.w = odomMsg.pose.pose.orientation.w;
     br.sendTransform(transform);
+    return;
+}
+
+void VnROS::writeSettings(){
+    int sensorBaudRate;
+    int asyncOutputRate;
+    int sensorImuRate;
+    GpsCompassBaselineRegister baseline;
+    vec3f antennaOffset;
+    bool nedToEnu;
+    getParams(asyncOutputRate, sensorImuRate, baseline, antennaOffset, nedToEnu, sensorBaudRate);
+    // write setting to sensor
+    vnSensor.changeBaudRate(sensorBaudRate);
+
+    BinaryOutputRegister bor(
+		ASYNCMODE_PORT1,
+		sensorImuRate / asyncOutputRate,
+		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION,	// Note use of binary OR to configure flags.
+		TIMEGROUP_NONE,
+		IMUGROUP_NONE,
+        GPSGROUP_NONE,
+		ATTITUDEGROUP_NONE,
+		INSGROUP_NONE | INSGROUP_POSECEF,
+        GPSGROUP_NONE);
+
+    vnSensor.writeBinaryOutput1(bor);
+    // Set Data output Freq [Hz]
+    vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
+
+    // write baseline.
+    vnSensor.writeGpsCompassBaseline(baseline);
+    // write antenna offset
+    vnSensor.writeGpsAntennaOffset(antennaOffset);
+    // write reference frame / mounting of sensor
+    // vnSensor.writeReferenceFrameRotation(rotation);
+    return;
+}
+
+void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
+                    vec3f& antennaOffset, bool& nedToEnu, int& baudRate)
+{
+    // read params from nodehandle
+    pn->param<int>("serial_baud", baudRate, 115200);
+    pn->param<int>("async_output_rate", asyncRate, 40);
+    pn->param<int>("fixed_imu_rate", imuRate, 400);
+    // load vector parameters into tempVec
+    vector<float> tempVec;
+    pn->param("baseline", tempVec, {1, 0, 0});
+    ROS_ASSERT(tempVec.size() == 3);
+    baseline.position[0] = tempVec[0];
+    baseline.position[1] = tempVec[1];
+    baseline.position[2] = tempVec[2];
+    pn->param("antenna_offset", tempVec, {0, 0, 0});
+    ROS_ASSERT(tempVec.size() == 3);
+    antennaOffset[0] = tempVec[0];
+    antennaOffset[1] = tempVec[1];
+    antennaOffset[2] = tempVec[2];
+    pn->param("ned_to_enu", nedToEnu, false);
+    return;
+}
+
+void VnROS::printSettings(){
+    stringstream ss;
+    // Query the sensor's model number.
+    string mn = vnSensor.readModelNumber();
+    string fv = vnSensor.readFirmwareVersion();
+    uint32_t hv = vnSensor.readHardwareRevision();
+    uint32_t sn = vnSensor.readSerialNumber();
+    ss << "VnROS settings:" << endl; 
+    ss << "\tModel Number: " << mn << ", Firmware version: " << fv << endl;
+    ss << "\tHardware Revision: " << hv << ", Serial number: " << sn << endl;
+
+    int sensorBaudRate = vnSensor.readSerialBaudRate();
+    int asyncOutputRate = vnSensor.readAsyncDataOutputFrequency();
+    GpsCompassBaselineRegister baseline = vnSensor.readGpsCompassBaseline();
+    vec3f antennaOffset = vnSensor.readGpsAntennaOffset();
+    ss << "\tBaudrate: " << sensorBaudRate << ", Async rate: " << asyncOutputRate << endl;
+    ss << "\tBaseline: " << str(baseline.position) << endl;
+    ss << "\tAntenna offset: " << str(antennaOffset) << endl;
+    ROS_INFO("%s", ss.str().c_str());
     return;
 }
 
