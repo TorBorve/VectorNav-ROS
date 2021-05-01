@@ -81,9 +81,6 @@ void VnROS::connect(){
         ROS_INFO("Connecting with baudrate: %d", baudrate);
         try {
             vnSensor.connect(sensorPort, baudrate);
-            // vnSensor.changeBaudRate(sensorBaudRate);
-            // // break when connected successfully
-            // break;
         } catch (...){ }
         if (vnSensor.verifySensorConnectivity()){break;}
     }
@@ -96,7 +93,6 @@ void VnROS::connect(){
         ROS_WARN("With the test IMU 128000 did not work, all others worked fine.");
         throw runtime_error("could not connect too sensor");
     }
-
     writeSettings();
     printSettings();
     // register callback function
@@ -130,14 +126,7 @@ void VnROS::pubOdom(CompositeData& cd){
     if (cd.hasQuaternion()){
         vec4f q = cd.quaternion();
         tf2::Quaternion tf2_quat(q[1], q[0], -q[2], q[3]);
-        // Create a rotation from NED -> ENU
-        // tf2::Quaternion q_rotate;
-        // q_rotate.setRPY(M_PI, 0.0, M_PI/2);
-        // tf2_quat = q_rotate * tf2_quat;
-        // tf2::Quaternion q2(sqrt(2)/2, sqrt(2)/2, 0, 0);
-        // tf2_quat = tf2_quat * q2;
-        geometry_msgs::Quaternion quat_msg = tf2::toMsg(tf2_quat);
-        odomMsg.pose.pose.orientation = quat_msg;
+        odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
     }
     if (cd.hasVelocityEstimatedBody()){
         vec3f vel = cd.velocityEstimatedBody();
@@ -220,8 +209,7 @@ void VnROS::writeSettings(){
     int sensorImuRate;
     GpsCompassBaselineRegister baseline;
     vec3f antennaOffset;
-    bool nedToEnu;
-    getParams(asyncOutputRate, sensorImuRate, baseline, antennaOffset, nedToEnu, sensorBaudRate);
+    getParams(asyncOutputRate, sensorImuRate, baseline, antennaOffset, sensorBaudRate);
     // write setting to sensor
     vnSensor.changeBaudRate(sensorBaudRate);
 
@@ -250,7 +238,7 @@ void VnROS::writeSettings(){
 }
 
 void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
-                    vec3f& antennaOffset, bool& nedToEnu, int& baudRate)
+                    vec3f& antennaOffset, int& baudRate)
 {
     // read params from nodehandle
     pn->param<int>("serial_baud", baudRate, 115200);
@@ -268,7 +256,6 @@ void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& 
     antennaOffset[0] = tempVec[0];
     antennaOffset[1] = tempVec[1];
     antennaOffset[2] = tempVec[2];
-    pn->param("ned_to_enu", nedToEnu, false);
     return;
 }
 

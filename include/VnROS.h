@@ -25,10 +25,6 @@ public:
     std::string mapFrameId;
     std::string frameId;
     bool nedToEnu;
-    //std::string sensorPort;
-    //int sensorBaudRate;
-    //int asyncOutputRate;
-    //int sensorImuRate;
 };
 
 class VnROS {
@@ -44,7 +40,7 @@ private:
     void broadcastTf(const ros::TimerEvent& event);
     void writeSettings();
     void getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
-                    vec3f& antennaOffset, bool& nedToEnu, int& baudRate);
+                    vec3f& antennaOffset, int& baudRate);
     void printSettings();
     // sensor
     vn::sensors::VnSensor vnSensor;
