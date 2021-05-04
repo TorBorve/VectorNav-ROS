@@ -7,13 +7,6 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#include <list>
-
-// initial callback from vectornav. userData is a pointer to our class.
-void callBackVectornav(void* userData, Packet& p, size_t index){
-    static_cast<VnROS*>(userData)->callback(p, index);
-    return;
-}
 
 // Basic loop so we can initilize our covariance parameters
 boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
@@ -30,7 +23,7 @@ boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
     return output;
 }
 
-VnROS::VnROS(ros::NodeHandle* pn) : pn{pn} {
+VnRos::VnRos(ros::NodeHandle* pn) : pn{pn} {
     // Load all params
     pn->param<std::string>("map_frame_id", params.mapFrameId, "map");
     pn->param<std::string>("frame_id", params.frameId, "vectornav");
@@ -48,20 +41,23 @@ VnROS::VnROS(ros::NodeHandle* pn) : pn{pn} {
         params.orientationCovariance = setCov(rpc_temp);
     }
     int asyncOutputRate;
+    std::string ns;
     pn->param<int>("async_output_rate", asyncOutputRate, 40);
+    pn->param<std::string>("ns", ns, "vectornav");
 
     ros::NodeHandle nh;
-    odomPub = nh.advertise<nav_msgs::Odometry>("vectornav/Odom", 100);
-    imuPub = nh.advertise<sensor_msgs::Imu>("vectornav/Imu", 100);
-    tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnROS::broadcastTf, this);
-    ROS_INFO("VnROS initialized");
+    odomPub = nh.advertise<nav_msgs::Odometry>(ns + "/Odom", 100);
+    imuPub = nh.advertise<sensor_msgs::Imu>(ns + "/Imu", 100);
+    tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
+    
     // fix invalid quaterinon [0, 0, 0, 0]
     odomMsg.pose.pose.orientation.w = 1;
     odomMsg.child_frame_id = params.frameId;
     odomMsg.header.frame_id = params.mapFrameId;
+    ROS_INFO("VnROS initialized");
 }
 
-void VnROS::connect(){
+void VnRos::connect(){
     // parameters for connection
     std::string sensorPort;
     int sensorBaudRate;
@@ -72,11 +68,14 @@ void VnROS::connect(){
 
     ROS_INFO("Connecting to: %s @ %d Baud", sensorPort.c_str(), sensorBaudRate);
 
+    // update response timeout to avoid timeout exception
     vnSensor.setResponseTimeoutMs(1000);
     vnSensor.setRetransmitDelayMs(50);
     // prioritize connecting to sensorBaudrate and defuault baudrate
-    list<uint32_t> baudrateQueue = {(uint32_t)sensorBaudRate, 115200};
+    vector<uint32_t> baudrateQueue = {(uint32_t)sensorBaudRate, 115200};
+    // append supported baudrates
     for (const auto& baudrate : vnSensor.supportedBaudrates()) { baudrateQueue.push_back(baudrate);}
+    // try connecting to the baudrates
     for (const auto& baudrate : baudrateQueue){
         ROS_INFO("Connecting with baudrate: %d", baudrate);
         try {
@@ -95,19 +94,21 @@ void VnROS::connect(){
     }
     writeSettings();
     printSettings();
+
     // register callback function
-    vnSensor.registerAsyncPacketReceivedHandler(this, callBackVectornav);
+    vnSensor.registerAsyncPacketReceivedHandler(this, callback);
     return;
 }
 
-void VnROS::callback(Packet& p, size_t index){
+void VnRos::callback(void* userData, Packet& p, size_t index){
+    VnRos* vnRos = static_cast<VnRos*>(userData);
     vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
-    pubOdom(cd);
-    pubImu(cd);
+    vnRos->pubOdom(cd);
+    vnRos->pubImu(cd);
     return;
 }
 
-void VnROS::pubOdom(CompositeData& cd){
+void VnRos::pubOdom(CompositeData& cd){
     odomMsg.header.stamp = ros::Time::now();
     if (cd.hasPositionEstimatedEcef()){
         vec3d pos = cd.positionEstimatedEcef();
@@ -144,50 +145,49 @@ void VnROS::pubOdom(CompositeData& cd){
     return;
 }
 
-void VnROS::pubImu(CompositeData& cd){
+void VnRos::pubImu(CompositeData& cd){
     // return if no subsribers
-    if (imuPub.getNumSubscribers() == 0){
-        return;
+    if (imuPub.getNumSubscribers() != 0 && cd.hasQuaternion()) 
+        // && cd.hasAngularRate() && cd.hasAcceleration())
+    {
+        sensor_msgs::Imu imuMsg;
+        imuMsg.header.frame_id = params.frameId;
+        imuMsg.header.stamp = ros::Time::now();
+        if (cd.hasQuaternion()){
+            vec4f quat = cd.quaternion();
+            imuMsg.orientation.x = quat[1];
+            imuMsg.orientation.y = quat[0];
+            imuMsg.orientation.z = -quat[2];
+            imuMsg.orientation.w = quat[3];
+        }
+        if (cd.hasAttitudeUncertainty()){
+            // large uncertainty on startup
+            vec3f orientationStdDev = cd.attitudeUncertainty();
+            imuMsg.orientation_covariance[0] = orientationStdDev[2]*orientationStdDev[2]*M_PI/180; // Convert to radians pitch
+            imuMsg.orientation_covariance[4] = orientationStdDev[1]*orientationStdDev[1]*M_PI/180; // Convert to radians Roll
+            imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
+        }
+        if (cd.hasAngularRate()){
+            vec3f ar = cd.angularRate();
+            imuMsg.angular_velocity.x = ar[0];
+            imuMsg.angular_velocity.y = ar[1];
+            imuMsg.angular_velocity.z = ar[2];
+        }
+        if (cd.hasAcceleration()){
+            vec3f al = cd.acceleration();
+            imuMsg.linear_acceleration.x = al[0];
+            imuMsg.linear_acceleration.y = al[1];
+            imuMsg.linear_acceleration.z = al[2];
+        }
+
+        imuMsg.angular_velocity_covariance = params.angularVelCovariance;
+        imuMsg.linear_acceleration_covariance = params.linearAccelCovariance;
+        imuPub.publish(imuMsg);
     }
-    sensor_msgs::Imu imuMsg;
-    imuMsg.header.frame_id = params.frameId;
-    imuMsg.header.stamp = ros::Time::now();
-    if (cd.hasQuaternion()){
-        vec4f quat = cd.quaternion();
-        imuMsg.orientation.x = quat[0];
-        imuMsg.orientation.y = quat[1];
-        imuMsg.orientation.z = quat[2];
-        imuMsg.orientation.w = quat[3];
-    } else {
-        // fix invalid quaternion
-        imuMsg.orientation.w = 1;
-    }
-    if (cd.hasAttitudeUncertainty()){
-        // large uncertainty on startup
-        vec3f orientationStdDev = cd.attitudeUncertainty();
-        imuMsg.orientation_covariance[0] = orientationStdDev[2]*orientationStdDev[2]*M_PI/180; // Convert to radians pitch
-        imuMsg.orientation_covariance[4] = orientationStdDev[1]*orientationStdDev[1]*M_PI/180; // Convert to radians Roll
-        imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
-    }
-    if (cd.hasAngularRate()){
-        vec3f ar = cd.angularRate();
-        imuMsg.angular_velocity.x = ar[0];
-        imuMsg.angular_velocity.y = ar[1];
-        imuMsg.angular_velocity.z = ar[2];
-    }
-    if (cd.hasAcceleration()){
-        vec3f al = cd.acceleration();
-        imuMsg.linear_acceleration.x = al[0];
-        imuMsg.linear_acceleration.y = al[1];
-        imuMsg.linear_acceleration.z = al[2];
-    }
-    imuMsg.angular_velocity_covariance = params.angularVelCovariance;
-    imuMsg.linear_acceleration_covariance = params.linearAccelCovariance;
-    imuPub.publish(imuMsg);
     return;
 }
 
-void VnROS::broadcastTf(const ros::TimerEvent& event){
+void VnRos::broadcastTf(const ros::TimerEvent& event){
     geometry_msgs::TransformStamped transform;
     transform.header.frame_id = params.mapFrameId;
     transform.header.stamp = event.current_real;
@@ -203,7 +203,7 @@ void VnROS::broadcastTf(const ros::TimerEvent& event){
     return;
 }
 
-void VnROS::writeSettings(){
+void VnRos::writeSettings(){
     int sensorBaudRate;
     int asyncOutputRate;
     int sensorImuRate;
@@ -213,18 +213,21 @@ void VnROS::writeSettings(){
     // write setting to sensor
     vnSensor.changeBaudRate(sensorBaudRate);
 
+    // specify what data we want the sensor to send
     BinaryOutputRegister bor(
 		ASYNCMODE_PORT1,
 		sensorImuRate / asyncOutputRate,
-		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION,	// Note use of binary OR to configure flags.
-		TIMEGROUP_NONE,
-		IMUGROUP_NONE,
+		COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION |
+        COMMONGROUP_INSSTATUS | COMMONGROUP_VELOCITY,	// Note use of binary OR to configure flags.
+		TIMEGROUP_NONE | TIMEGROUP_TIMESTARTUP,
+		IMUGROUP_NONE | IMUGROUP_ANGULARRATE | IMUGROUP_UNCOMPACCEL,
         GPSGROUP_NONE,
-		ATTITUDEGROUP_NONE,
-		INSGROUP_NONE | INSGROUP_POSECEF,
+		ATTITUDEGROUP_NONE | ATTITUDEGROUP_VPESTATUS | ATTITUDEGROUP_YPRU,
+		INSGROUP_NONE | INSGROUP_POSECEF |INSGROUP_VELNED| INSGROUP_VELBODY ,
         GPSGROUP_NONE);
 
     vnSensor.writeBinaryOutput1(bor);
+
     // Set Data output Freq [Hz]
     vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
 
@@ -237,13 +240,14 @@ void VnROS::writeSettings(){
     return;
 }
 
-void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
+void VnRos::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
                     vec3f& antennaOffset, int& baudRate)
 {
     // read params from nodehandle
     pn->param<int>("serial_baud", baudRate, 115200);
     pn->param<int>("async_output_rate", asyncRate, 40);
     pn->param<int>("fixed_imu_rate", imuRate, 400);
+
     // load vector parameters into tempVec
     vector<float> tempVec;
     pn->param("baseline", tempVec, {1, 0, 0});
@@ -251,6 +255,7 @@ void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& 
     baseline.position[0] = tempVec[0];
     baseline.position[1] = tempVec[1];
     baseline.position[2] = tempVec[2];
+
     pn->param("antenna_offset", tempVec, {0, 0, 0});
     ROS_ASSERT(tempVec.size() == 3);
     antennaOffset[0] = tempVec[0];
@@ -259,7 +264,7 @@ void VnROS::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& 
     return;
 }
 
-void VnROS::printSettings(){
+void VnRos::printSettings(){
     stringstream ss;
     // Query the sensor's model number.
     string mn = vnSensor.readModelNumber();
@@ -270,6 +275,7 @@ void VnROS::printSettings(){
     ss << "\tModel Number: " << mn << ", Firmware version: " << fv << endl;
     ss << "\tHardware Revision: " << hv << ", Serial number: " << sn << endl;
 
+    // read settings form sensor
     int sensorBaudRate = vnSensor.readSerialBaudRate();
     int asyncOutputRate = vnSensor.readAsyncDataOutputFrequency();
     GpsCompassBaselineRegister baseline = vnSensor.readGpsCompassBaseline();
@@ -281,14 +287,13 @@ void VnROS::printSettings(){
     return;
 }
 
-void VnROS::disconnect(){
+void VnRos::disconnect(){
     vnSensor.unregisterAsyncPacketReceivedHandler();
     vnSensor.disconnect();
     return;
 }
 
-VnROS::~VnROS(){
-    // Node has been terminated
+VnRos::~VnRos(){
     // check if sensor is connected
     if (vnSensor.verifySensorConnectivity()){
         vnSensor.unregisterAsyncPacketReceivedHandler();

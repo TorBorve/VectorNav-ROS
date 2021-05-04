@@ -2,6 +2,7 @@
 <launch>
     <!-- launch vectornav script with params -->
     <node pkg="vectornav" type="vn300" name="vectornav" output="screen">
+        <param name="ns" value="vectornav"/>
         <rosparam command="load" file="$(find vectornav)/params/vn300.yaml" />
     </node>
     <!-- launch rviz -->
