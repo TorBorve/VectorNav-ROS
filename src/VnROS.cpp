@@ -81,6 +81,7 @@ void VnRos::connect(){
         try {
             vnSensor.connect(sensorPort, baudrate);
         } catch (...){ }
+        // check if connection was sucessfull
         if (vnSensor.verifySensorConnectivity()){break;}
     }
     if (vnSensor.verifySensorConnectivity()){
