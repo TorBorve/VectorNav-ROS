@@ -42,15 +42,21 @@ public:
     /// @brief disconnect from vn sensor
     void disconnect();
 
+    ~VnRos();
+private:
     /// @brief callback function for async data.
     /// @param[in] userData pointer to VnRos class
     /// @param[in] p data recived from sensor
     /// @param[in] index number for packet?
     static void callback(void* userData, Packet& p, size_t index);
 
+    void initCallback();
+
+    static void startupCallback(void* userData, Packet& p, size_t index);
+
+    void initStartupCallback();
+
     /// @brief destructor for VnRos class. Disconnects if sensor is connected
-    ~VnRos();
-private:
     /// @brief publishes odom message to odom topic. 
     /// @param[in] cd Data recived from sensor.
     void pubOdom(CompositeData& cd);

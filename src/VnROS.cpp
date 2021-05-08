@@ -1,5 +1,9 @@
 #include "VnROS.h"
 #include "matVecMult.h"
+// #include "debugVnRos.h"
+#include "utilities.h"
+
+#include <bitset>
 
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -96,10 +100,19 @@ void VnRos::connect(){
     writeSettings();
     printSettings();
 
-    // register callback function
-    vnSensor.registerAsyncPacketReceivedHandler(this, callback);
+    vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
     return;
 }
+
+// void VnRos::initCallback(){
+//     ROS_ERROR("initCallback");
+//     writeSettings();
+//     // ROS_ERROR("wrote");
+//     printSettings();
+//     ROS_ERROR("settings finished");
+//     vnSensor.registerAsyncPacketReceivedHandler(this, callback);
+//     return;
+// }
 
 void VnRos::callback(void* userData, Packet& p, size_t index){
     VnRos* vnRos = static_cast<VnRos*>(userData);
@@ -291,6 +304,50 @@ void VnRos::printSettings(){
 void VnRos::disconnect(){
     vnSensor.unregisterAsyncPacketReceivedHandler();
     vnSensor.disconnect();
+    return;
+}
+
+// void VnRos::initStartupCallback(){
+//     uint16_t rate = 2;
+//     uint16_t rateDivisor = 800 / rate;
+//     BinaryOutputRegister bor{
+//         ASYNCMODE_PORT1,
+//         rateDivisor,
+//         COMMONGROUP_INSSTATUS | COMMONGROUP_QUATERNION,
+//         TIMEGROUP_NONE,
+//         IMUGROUP_NONE,
+//         GPSGROUP_NONE,
+//         ATTITUDEGROUP_NONE,
+//         INSGROUP_NONE,
+//         GPSGROUP_NONE
+//     };
+//     vnSensor.writeBinaryOutput1(bor);
+//     vnSensor.writeAsyncDataOutputFrequency(rate);
+//     vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
+//     return;
+// }
+
+void VnRos::startupCallback(void* userData, Packet& p, size_t index){
+    static int i = 0;
+    static ros::Duration printPeriod{5}; 
+    static ros::Time lastPrint = ros::Time::now() - printPeriod;
+
+    VnRos* vnRos = static_cast<VnRos*>(userData);
+    CompositeData cd = vn::sensors::CompositeData::parse(p);
+    if (cd.hasInsStatus() && cd.hasQuaternion()){
+        utilities::InsStatus status{cd.insStatus()};
+        if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod){
+            ROS_INFO_STREAM(status); 
+            ROS_INFO_STREAM(std::bitset<16>(cd.insStatus()));
+            lastPrint += printPeriod;
+            i++;
+        }
+        if (i >= 2){
+            vnRos->vnSensor.unregisterAsyncPacketReceivedHandler();
+            vnRos->vnSensor.registerAsyncPacketReceivedHandler(userData, VnRos::callback);
+            ROS_INFO("Changed callback function too vnRos::callback");
+        };
+    }
     return;
 }
 
