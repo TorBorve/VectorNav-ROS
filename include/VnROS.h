@@ -36,7 +36,7 @@ public:
     VnRos(ros::NodeHandle* pn);
 
     /// @brief connect to vn sensor
-    /// @exception runtime_error thrown unable to connect
+    /// @exception runtime_error thrown if unable to connect
     void connect();
 
     /// @brief disconnect from vn sensor
@@ -50,11 +50,7 @@ private:
     /// @param[in] index number for packet?
     static void callback(void* userData, Packet& p, size_t index);
 
-    void initCallback();
-
     static void startupCallback(void* userData, Packet& p, size_t index);
-
-    void initStartupCallback();
 
     /// @brief destructor for VnRos class. Disconnects if sensor is connected
     /// @brief publishes odom message to odom topic. 
@@ -95,6 +91,8 @@ private:
     
     /// @brief publisher for Imu
     ros::Publisher imuPub;
+
+    ros::Publisher insStatusPub;
 
     /// @brief parameters for VnRos
     VnParams params;

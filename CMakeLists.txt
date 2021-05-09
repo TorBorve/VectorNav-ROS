@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
     FILES
     Ins.msg
+    InsStatus.msg
 )
 
 generate_messages(
@@ -66,6 +67,6 @@ install(TARGETS vnpub
 )
 
 ## Declare vn300 executable
-add_executable(vn300 src/vn300.cpp src/VnROS.cpp)
+add_executable(vn300 src/vn300.cpp src/VnROS.cpp src/utilities.cpp)
 add_dependencies(vn300 ${PROJECT_NAME}_generate_messages)
 target_link_libraries(vn300 libvncxx ${catkin_LIBRARIES})

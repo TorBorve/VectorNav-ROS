@@ -1,6 +1,5 @@
 #include "VnROS.h"
 #include "matVecMult.h"
-// #include "debugVnRos.h"
 #include "utilities.h"
 
 #include <bitset>
@@ -10,6 +9,7 @@
 #include <sensor_msgs/Imu.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include "vectornav/InsStatus.h"
 
 
 // Basic loop so we can initilize our covariance parameters
@@ -52,6 +52,7 @@ VnRos::VnRos(ros::NodeHandle* pn) : pn{pn} {
     ros::NodeHandle nh;
     odomPub = nh.advertise<nav_msgs::Odometry>(ns + "/Odom", 100);
     imuPub = nh.advertise<sensor_msgs::Imu>(ns + "/Imu", 100);
+    insStatusPub = nh.advertise<vectornav::InsStatus>(ns + "/InsStatus", 100);
     tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
     
     // fix invalid quaterinon [0, 0, 0, 0]
@@ -103,16 +104,6 @@ void VnRos::connect(){
     vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
     return;
 }
-
-// void VnRos::initCallback(){
-//     ROS_ERROR("initCallback");
-//     writeSettings();
-//     // ROS_ERROR("wrote");
-//     printSettings();
-//     ROS_ERROR("settings finished");
-//     vnSensor.registerAsyncPacketReceivedHandler(this, callback);
-//     return;
-// }
 
 void VnRos::callback(void* userData, Packet& p, size_t index){
     VnRos* vnRos = static_cast<VnRos*>(userData);
@@ -307,26 +298,6 @@ void VnRos::disconnect(){
     return;
 }
 
-// void VnRos::initStartupCallback(){
-//     uint16_t rate = 2;
-//     uint16_t rateDivisor = 800 / rate;
-//     BinaryOutputRegister bor{
-//         ASYNCMODE_PORT1,
-//         rateDivisor,
-//         COMMONGROUP_INSSTATUS | COMMONGROUP_QUATERNION,
-//         TIMEGROUP_NONE,
-//         IMUGROUP_NONE,
-//         GPSGROUP_NONE,
-//         ATTITUDEGROUP_NONE,
-//         INSGROUP_NONE,
-//         GPSGROUP_NONE
-//     };
-//     vnSensor.writeBinaryOutput1(bor);
-//     vnSensor.writeAsyncDataOutputFrequency(rate);
-//     vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
-//     return;
-// }
-
 void VnRos::startupCallback(void* userData, Packet& p, size_t index){
     static int i = 0;
     static ros::Duration printPeriod{5}; 
@@ -336,13 +307,18 @@ void VnRos::startupCallback(void* userData, Packet& p, size_t index){
     CompositeData cd = vn::sensors::CompositeData::parse(p);
     if (cd.hasInsStatus() && cd.hasQuaternion()){
         utilities::InsStatus status{cd.insStatus()};
+        vectornav::InsStatus statusMsg = utilities::toMsg(status);
+        statusMsg.header.frame_id = vnRos->params.frameId;
+        statusMsg.header.stamp = ros::Time::now();
+        vnRos->insStatusPub.publish(statusMsg);
+
         if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod){
             ROS_INFO_STREAM(status); 
             ROS_INFO_STREAM(std::bitset<16>(cd.insStatus()));
             lastPrint += printPeriod;
             i++;
         }
-        if (i >= 2){
+        if (status.isOk()){
             vnRos->vnSensor.unregisterAsyncPacketReceivedHandler();
             vnRos->vnSensor.registerAsyncPacketReceivedHandler(userData, VnRos::callback);
             ROS_INFO("Changed callback function too vnRos::callback");
