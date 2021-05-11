@@ -101,7 +101,8 @@ void VnRos::connect(){
     writeSettings();
     printSettings();
 
-    vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
+    // vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
+    vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::callback);
     return;
 }
 
@@ -110,6 +111,7 @@ void VnRos::callback(void* userData, Packet& p, size_t index){
     vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
     vnRos->pubOdom(cd);
     vnRos->pubImu(cd);
+    vnRos->pubStatus(cd);
     return;
 }
 
@@ -120,13 +122,9 @@ void VnRos::pubOdom(CompositeData& cd){
 
         if (!initialPositonSet){
             initialPositonSet = true;
-            initialPosition.x = pos[0];
-            initialPosition.y = pos[1];
-            initialPosition.z = pos[2];
+            initialPosition = pos;
         }
-        odomMsg.pose.pose.position.x = pos[0] - initialPosition[0];
-        odomMsg.pose.pose.position.y = pos[1] - initialPosition[1];
-        odomMsg.pose.pose.position.z = pos[2] - initialPosition[2];
+        odomMsg.pose.pose.position = utilities::toMsg(pos - initialPosition);
     }
 
     if (cd.hasQuaternion()){
@@ -135,16 +133,10 @@ void VnRos::pubOdom(CompositeData& cd){
         odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
     }
     if (cd.hasVelocityEstimatedBody()){
-        vec3f vel = cd.velocityEstimatedBody();
-        odomMsg.twist.twist.linear.x = vel[0];
-        odomMsg.twist.twist.linear.y = vel[1];
-        odomMsg.twist.twist.linear.z = vel[2];
+        odomMsg.twist.twist.linear = utilities::toMsg(cd.velocityEstimatedBody());
     }
     if (cd.hasAngularRate()){
-        vec3f ar = cd.angularRate();
-        odomMsg.twist.twist.angular.x = ar[0];
-        odomMsg.twist.twist.angular.y = ar[1];
-        odomMsg.twist.twist.angular.z = ar[2];
+        odomMsg.twist.twist.angular = utilities::toMsg(cd.angularRate());
     }
     odomPub.publish(odomMsg);
     return;
@@ -159,11 +151,7 @@ void VnRos::pubImu(CompositeData& cd){
         imuMsg.header.frame_id = params.frameId;
         imuMsg.header.stamp = ros::Time::now();
         if (cd.hasQuaternion()){
-            vec4f quat = cd.quaternion();
-            imuMsg.orientation.x = quat[1];
-            imuMsg.orientation.y = quat[0];
-            imuMsg.orientation.z = -quat[2];
-            imuMsg.orientation.w = quat[3];
+            imuMsg.orientation = utilities::toMsg(cd.quaternion());
         }
         if (cd.hasAttitudeUncertainty()){
             // large uncertainty on startup
@@ -173,21 +161,26 @@ void VnRos::pubImu(CompositeData& cd){
             imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
         }
         if (cd.hasAngularRate()){
-            vec3f ar = cd.angularRate();
-            imuMsg.angular_velocity.x = ar[0];
-            imuMsg.angular_velocity.y = ar[1];
-            imuMsg.angular_velocity.z = ar[2];
+            imuMsg.angular_velocity = utilities::toMsg(cd.angularRate());
         }
         if (cd.hasAcceleration()){
-            vec3f al = cd.acceleration();
-            imuMsg.linear_acceleration.x = al[0];
-            imuMsg.linear_acceleration.y = al[1];
-            imuMsg.linear_acceleration.z = al[2];
+            imuMsg.linear_acceleration = utilities::toMsg(cd.acceleration());
         }
 
         imuMsg.angular_velocity_covariance = params.angularVelCovariance;
         imuMsg.linear_acceleration_covariance = params.linearAccelCovariance;
         imuPub.publish(imuMsg);
+    }
+    return;
+}
+
+void VnRos::pubStatus(CompositeData& cd){
+    if (cd.hasInsStatus() && cd.hasQuaternion()){
+        utilities::InsStatus status{cd.insStatus()};
+        vectornav::InsStatus statusMsg = utilities::toMsg(status);
+        statusMsg.header.stamp = ros::Time::now();
+        statusMsg.header.frame_id = params.frameId;
+        insStatusPub.publish(statusMsg);
     }
     return;
 }
@@ -306,11 +299,8 @@ void VnRos::startupCallback(void* userData, Packet& p, size_t index){
     VnRos* vnRos = static_cast<VnRos*>(userData);
     CompositeData cd = vn::sensors::CompositeData::parse(p);
     if (cd.hasInsStatus() && cd.hasQuaternion()){
+        vnRos->pubStatus(cd);
         utilities::InsStatus status{cd.insStatus()};
-        vectornav::InsStatus statusMsg = utilities::toMsg(status);
-        statusMsg.header.frame_id = vnRos->params.frameId;
-        statusMsg.header.stamp = ros::Time::now();
-        vnRos->insStatusPub.publish(statusMsg);
 
         if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod){
             ROS_INFO_STREAM(status); 

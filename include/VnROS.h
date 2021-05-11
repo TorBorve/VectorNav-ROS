@@ -61,6 +61,8 @@ private:
     /// @param[in] cd Data recived from sensor
     void pubImu(CompositeData& cd);
 
+    void pubStatus(CompositeData& cd);
+
     /// @brief callback function for tf broadcaster
     /// @param[in] event contains info about the time
     void broadcastTf(const ros::TimerEvent& event);
