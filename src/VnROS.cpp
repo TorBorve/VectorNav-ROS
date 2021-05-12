@@ -1,16 +1,30 @@
+/// include ros interface files
 #include "VnROS.h"
 #include "matVecMult.h"
 #include "utilities.h"
 
+/// include standar C++ files
 #include <bitset>
 
+/// include ros files
+#include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/Imu.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_broadcaster.h>
 #include "vectornav/InsStatus.h"
 
+/// include vectornav files from C++ library
+#include <vn/sensors.h>
+#include <vn/compositedata.h>
+#include <vn/util.h>
+
+using namespace std;
+using namespace vn::math;
+using namespace vn::sensors;
+using namespace vn::protocol::uart;
 
 // Basic loop so we can initilize our covariance parameters
 boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
@@ -98,17 +112,25 @@ void VnRos::connect(){
         ROS_WARN("With the test IMU 128000 did not work, all others worked fine.");
         throw runtime_error("could not connect too sensor");
     }
-    writeSettings();
-    printSettings();
+    try{
+        writeSettings();
+        printSettings();
+    } catch (std::exception& e){
+        ROS_ERROR("Exception while writing and reading settings from vectornav sensor.\n Error: %s", e.what());
+        throw std::runtime_error("could not write and/or read settings form vectornav sensor");
+    } catch (...){
+        ROS_ERROR("Exception while writing and reading settings from vectornav sensor.");
+        throw std::runtime_error("could not write and/or read settings form vectornav sensor.");
+    }
 
-    // vnSensor.registerAsyncPacketReceivedHandler(this, startupCallback);
+    // vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::startupCallback);
     vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::callback);
     return;
 }
 
 void VnRos::callback(void* userData, Packet& p, size_t index){
     VnRos* vnRos = static_cast<VnRos*>(userData);
-    vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
+    auto cd = vn::sensors::CompositeData::parse(p);
     vnRos->pubOdom(cd);
     vnRos->pubImu(cd);
     vnRos->pubStatus(cd);
@@ -292,23 +314,27 @@ void VnRos::disconnect(){
 }
 
 void VnRos::startupCallback(void* userData, Packet& p, size_t index){
-    static int i = 0;
-    static ros::Duration printPeriod{5}; 
+    // static variables for printing status to console
+    static const ros::Duration printPeriod{5}; 
     static ros::Time lastPrint = ros::Time::now() - printPeriod;
 
     VnRos* vnRos = static_cast<VnRos*>(userData);
-    CompositeData cd = vn::sensors::CompositeData::parse(p);
+    auto cd = vn::sensors::CompositeData::parse(p);
+
+    // check if the cd is valid
     if (cd.hasInsStatus() && cd.hasQuaternion()){
         vnRos->pubStatus(cd);
         utilities::InsStatus status{cd.insStatus()};
 
+        // check if it is time for printing
         if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod){
             ROS_INFO_STREAM(status); 
             ROS_INFO_STREAM(std::bitset<16>(cd.insStatus()));
-            lastPrint += printPeriod;
-            i++;
+            lastPrint = ros::Time::now();
         }
+        // check if startup is complete.
         if (status.isOk()){
+            // changes too new callback function
             vnRos->vnSensor.unregisterAsyncPacketReceivedHandler();
             vnRos->vnSensor.registerAsyncPacketReceivedHandler(userData, VnRos::callback);
             ROS_INFO("Changed callback function too vnRos::callback");

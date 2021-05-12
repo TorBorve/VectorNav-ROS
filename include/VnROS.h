@@ -1,21 +1,13 @@
 #pragma once
 
-#include <iostream>
-#include <cmath>
-
+/// include vectornav files
 #include "vn/sensors.h"
 #include "vn/compositedata.h"
-#include "vn/util.h"
 
+/// include ros files
 #include <ros/ros.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <nav_msgs/Odometry.h>
-
-using namespace std;
-using namespace vn::math;
-using namespace vn::sensors;
-using namespace vn::protocol::uart;
-using namespace vn::xplat;
 
 /// @brief parameters for VnRos class
 class VnParams {
@@ -47,21 +39,28 @@ private:
     /// @brief callback function for async data.
     /// @param[in] userData pointer to VnRos class
     /// @param[in] p data recived from sensor
-    /// @param[in] index number for packet?
-    static void callback(void* userData, Packet& p, size_t index);
+    /// @param[in] index number for packet
+    static void callback(void* userData, vn::protocol::uart::Packet& p, size_t index);
 
-    static void startupCallback(void* userData, Packet& p, size_t index);
+    /// @brief callback function for async data used on startup. 
+    /// Changes too normal callback when startup is complete.
+    /// @param[in] userData pointer to VnRos class
+    /// @param[in] p data recived from sensor
+    /// @param[in] index number for packet
+    static void startupCallback(void* userData, vn::protocol::uart::Packet& p, size_t index);
 
     /// @brief destructor for VnRos class. Disconnects if sensor is connected
     /// @brief publishes odom message to odom topic. 
     /// @param[in] cd Data recived from sensor.
-    void pubOdom(CompositeData& cd);
+    void pubOdom(vn::sensors::CompositeData& cd);
 
     /// @brief publishes imu message to imu topic
     /// @param[in] cd Data recived from sensor
-    void pubImu(CompositeData& cd);
+    void pubImu(vn::sensors::CompositeData& cd);
 
-    void pubStatus(CompositeData& cd);
+    /// @brief publishes InsStatus message to ins status topic
+    /// @param[in] cd Data recived from sensor
+    void pubStatus(vn::sensors::CompositeData& cd);
 
     /// @brief callback function for tf broadcaster
     /// @param[in] event contains info about the time
@@ -76,8 +75,8 @@ private:
     /// @param[in] baseline vector from antenna A too B and uncertainty
     /// @param[in] antannaOffset vector form sensor too antenna A
     /// @param[in] baudRate baudrate for sensor
-    void getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& baseline,
-                    vec3f& antennaOffset, int& baudRate);
+    void getParams(int& asyncRate, int& imuRate, vn::sensors::GpsCompassBaselineRegister& baseline,
+                    vn::math::vec3f& antennaOffset, int& baudRate);
 
     /// @brief prints current settings of vnSensor
     void printSettings();
@@ -94,6 +93,7 @@ private:
     /// @brief publisher for Imu
     ros::Publisher imuPub;
 
+    /// @brief publisher for ins status
     ros::Publisher insStatusPub;
 
     /// @brief parameters for VnRos
@@ -102,7 +102,7 @@ private:
     /// @brief bool for recived a position
     bool initialPositonSet = false;
     /// @brief initial position vector recived from sensor
-    vec3d initialPosition;
+    vn::math::vec3d initialPosition;
 
     /// @brief timer for tf broadcaster 
     ros::Timer tfTimer;
