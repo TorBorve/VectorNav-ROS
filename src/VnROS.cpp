@@ -1,12 +1,30 @@
+/// include ros interface files
 #include "VnROS.h"
 #include "matVecMult.h"
+#include "utilities.h"
 
+/// include standar C++ files
+#include <bitset>
+
+/// include ros files
+#include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/Imu.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include "vectornav/InsStatus.h"
 
+/// include vectornav files from C++ library
+#include <vn/sensors.h>
+#include <vn/compositedata.h>
+#include <vn/util.h>
+
+using namespace std;
+using namespace vn::math;
+using namespace vn::sensors;
+using namespace vn::protocol::uart;
 
 // Basic loop so we can initilize our covariance parameters
 boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc){
@@ -48,6 +66,7 @@ VnRos::VnRos(ros::NodeHandle* pn) : pn{pn} {
     ros::NodeHandle nh;
     odomPub = nh.advertise<nav_msgs::Odometry>(ns + "/Odom", 100);
     imuPub = nh.advertise<sensor_msgs::Imu>(ns + "/Imu", 100);
+    insStatusPub = nh.advertise<vectornav::InsStatus>(ns + "/InsStatus", 100);
     tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
     
     // fix invalid quaterinon [0, 0, 0, 0]
@@ -93,19 +112,28 @@ void VnRos::connect(){
         ROS_WARN("With the test IMU 128000 did not work, all others worked fine.");
         throw runtime_error("could not connect too sensor");
     }
-    writeSettings();
-    printSettings();
+    try{
+        writeSettings();
+        printSettings();
+    } catch (std::exception& e){
+        ROS_ERROR("Exception while writing and reading settings from vectornav sensor.\n Error: %s", e.what());
+        throw std::runtime_error("could not write and/or read settings form vectornav sensor");
+    } catch (...){
+        ROS_ERROR("Exception while writing and reading settings from vectornav sensor.");
+        throw std::runtime_error("could not write and/or read settings form vectornav sensor.");
+    }
 
-    // register callback function
-    vnSensor.registerAsyncPacketReceivedHandler(this, callback);
+    // vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::startupCallback);
+    vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::callback);
     return;
 }
 
 void VnRos::callback(void* userData, Packet& p, size_t index){
     VnRos* vnRos = static_cast<VnRos*>(userData);
-    vn::sensors::CompositeData cd = vn::sensors::CompositeData::parse(p);
+    auto cd = vn::sensors::CompositeData::parse(p);
     vnRos->pubOdom(cd);
     vnRos->pubImu(cd);
+    vnRos->pubStatus(cd);
     return;
 }
 
@@ -116,13 +144,9 @@ void VnRos::pubOdom(CompositeData& cd){
 
         if (!initialPositonSet){
             initialPositonSet = true;
-            initialPosition.x = pos[0];
-            initialPosition.y = pos[1];
-            initialPosition.z = pos[2];
+            initialPosition = pos;
         }
-        odomMsg.pose.pose.position.x = pos[0] - initialPosition[0];
-        odomMsg.pose.pose.position.y = pos[1] - initialPosition[1];
-        odomMsg.pose.pose.position.z = pos[2] - initialPosition[2];
+        odomMsg.pose.pose.position = utilities::toMsg(pos - initialPosition);
     }
 
     if (cd.hasQuaternion()){
@@ -131,16 +155,10 @@ void VnRos::pubOdom(CompositeData& cd){
         odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
     }
     if (cd.hasVelocityEstimatedBody()){
-        vec3f vel = cd.velocityEstimatedBody();
-        odomMsg.twist.twist.linear.x = vel[0];
-        odomMsg.twist.twist.linear.y = vel[1];
-        odomMsg.twist.twist.linear.z = vel[2];
+        odomMsg.twist.twist.linear = utilities::toMsg(cd.velocityEstimatedBody());
     }
     if (cd.hasAngularRate()){
-        vec3f ar = cd.angularRate();
-        odomMsg.twist.twist.angular.x = ar[0];
-        odomMsg.twist.twist.angular.y = ar[1];
-        odomMsg.twist.twist.angular.z = ar[2];
+        odomMsg.twist.twist.angular = utilities::toMsg(cd.angularRate());
     }
     odomPub.publish(odomMsg);
     return;
@@ -155,11 +173,7 @@ void VnRos::pubImu(CompositeData& cd){
         imuMsg.header.frame_id = params.frameId;
         imuMsg.header.stamp = ros::Time::now();
         if (cd.hasQuaternion()){
-            vec4f quat = cd.quaternion();
-            imuMsg.orientation.x = quat[1];
-            imuMsg.orientation.y = quat[0];
-            imuMsg.orientation.z = -quat[2];
-            imuMsg.orientation.w = quat[3];
+            imuMsg.orientation = utilities::toMsg(cd.quaternion());
         }
         if (cd.hasAttitudeUncertainty()){
             // large uncertainty on startup
@@ -169,21 +183,26 @@ void VnRos::pubImu(CompositeData& cd){
             imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
         }
         if (cd.hasAngularRate()){
-            vec3f ar = cd.angularRate();
-            imuMsg.angular_velocity.x = ar[0];
-            imuMsg.angular_velocity.y = ar[1];
-            imuMsg.angular_velocity.z = ar[2];
+            imuMsg.angular_velocity = utilities::toMsg(cd.angularRate());
         }
         if (cd.hasAcceleration()){
-            vec3f al = cd.acceleration();
-            imuMsg.linear_acceleration.x = al[0];
-            imuMsg.linear_acceleration.y = al[1];
-            imuMsg.linear_acceleration.z = al[2];
+            imuMsg.linear_acceleration = utilities::toMsg(cd.acceleration());
         }
 
         imuMsg.angular_velocity_covariance = params.angularVelCovariance;
         imuMsg.linear_acceleration_covariance = params.linearAccelCovariance;
         imuPub.publish(imuMsg);
+    }
+    return;
+}
+
+void VnRos::pubStatus(CompositeData& cd){
+    if (cd.hasInsStatus() && cd.hasQuaternion()){
+        utilities::InsStatus status{cd.insStatus()};
+        vectornav::InsStatus statusMsg = utilities::toMsg(status);
+        statusMsg.header.stamp = ros::Time::now();
+        statusMsg.header.frame_id = params.frameId;
+        insStatusPub.publish(statusMsg);
     }
     return;
 }
@@ -291,6 +310,36 @@ void VnRos::printSettings(){
 void VnRos::disconnect(){
     vnSensor.unregisterAsyncPacketReceivedHandler();
     vnSensor.disconnect();
+    return;
+}
+
+void VnRos::startupCallback(void* userData, Packet& p, size_t index){
+    // static variables for printing status to console
+    static const ros::Duration printPeriod{5}; 
+    static ros::Time lastPrint = ros::Time::now() - printPeriod;
+
+    VnRos* vnRos = static_cast<VnRos*>(userData);
+    auto cd = vn::sensors::CompositeData::parse(p);
+
+    // check if the cd is valid
+    if (cd.hasInsStatus() && cd.hasQuaternion()){
+        vnRos->pubStatus(cd);
+        utilities::InsStatus status{cd.insStatus()};
+
+        // check if it is time for printing
+        if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod){
+            ROS_INFO_STREAM(status); 
+            ROS_INFO_STREAM(std::bitset<16>(cd.insStatus()));
+            lastPrint = ros::Time::now();
+        }
+        // check if startup is complete.
+        if (status.isOk()){
+            // changes too new callback function
+            vnRos->vnSensor.unregisterAsyncPacketReceivedHandler();
+            vnRos->vnSensor.registerAsyncPacketReceivedHandler(userData, VnRos::callback);
+            ROS_INFO("Changed callback function too vnRos::callback");
+        };
+    }
     return;
 }
 
