@@ -1,5 +1,5 @@
 /// include ros interface files
-#include "VnROS.h"
+#include "VnRos.h"
 #include "matVecMult.h"
 #include "utilities.h"
 
@@ -122,7 +122,8 @@ void VnRos::connect(){
         ROS_ERROR("Exception while writing and reading settings from vectornav sensor.");
         throw std::runtime_error("could not write and/or read settings form vectornav sensor.");
     }
-
+    
+    // decide if you want the startup callback function or go straight to callback function
     // vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::startupCallback);
     vnSensor.registerAsyncPacketReceivedHandler(this, VnRos::callback);
     return;

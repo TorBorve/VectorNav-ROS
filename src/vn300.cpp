@@ -1,7 +1,7 @@
 /*
  * MIT License (MIT)
  *
- * Copyright (c) 2018 Dereck Wonnacott <dereck@gmail.com>
+ * Copyright (c) 2021 Tor Børve Rasmussen <rasmustor18@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -27,7 +27,7 @@
 
 #include <ros/ros.h>
 
-#include "VnROS.h"
+#include "VnRos.h"
 
 using namespace std;
 

@@ -31,7 +31,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES vectornav
-   CATKIN_DEPENDS roscpp sensor_msgs
+   CATKIN_DEPENDS roscpp sensor_msgs geometry_msgs
 #  DEPENDS system_lib
 )
 
@@ -67,6 +67,6 @@ install(TARGETS vnpub
 )
 
 ## Declare vn300 executable
-add_executable(vn300 src/vn300.cpp src/VnROS.cpp src/utilities.cpp)
+add_executable(vn300 src/vn300.cpp src/VnRos.cpp src/utilities.cpp)
 add_dependencies(vn300 ${PROJECT_NAME}_generate_messages)
 target_link_libraries(vn300 libvncxx ${catkin_LIBRARIES})
