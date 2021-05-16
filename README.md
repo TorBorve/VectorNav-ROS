@@ -1,92 +1,70 @@
-Vectornav ROS Driver
+Vectornav ROS
 ====================
 
 **[To do-list at the bottom](#to-do-list)**
 
-A ROS node for VectorNav INS & GPS devices.
+A ROS interface for VectorNav.
 
-This package provides a sensor_msg interface for the VN100, 200, & 300 
-devices. Simply configure your launch files to point to the serial port
-of the deice and you can use rostopic to quickly get running.   
+This package use the C++ library provided by VectorNav together with ROS.
+It starts a ROS node wich publishes IMU, Odometry and status messages. This repository is built upon Dereck Wonnacotts repository: https://github.com/dawonn/vectornav. 
+It is developed for the student organisation DNV Fuel Fighter. It is used to provide odometry for the autnomous car.
 
-Check out the ROS2 branch for ROS2 Support!
-
-
-The MIT License (MIT)
-----------------------
-
-Copyright (c) 2018 Dereck Wonnacott <dereck@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-
-
-QuickStart Guide
+Setup
 ----------------
 
-This assumes that you have a VectorNav device connected to your computer 
-via a USB cable and that you have already created a [catkin workspace][2]
+First we need to make sure we have accses to the USB port wich the VectorNav unit is connected to.
+To do this we need to add your user to the dailout group. This will give us permision to talk to the USB port. This is done by running:
 
-Build:
+```
+sudo adduser "your username" dialout
+```
+It is necesary to log out and in or restart your computer for the changes to take effect.
 
-1. cd ~/catkin_ws/src
-2. git clone https://github.com/dawonn/vectornav.git
-3. cd ..
-4. catkin_make
+Now we need to clone this repository in your desired workspace and build it. For example:
+```
+cd ~catkin_ws/src
+git clone https://gitlab.stud.idi.ntnu.no/fuelfighter/autonomous/odometry/vectornav.git
+cd ..
+catkin build (or catkin_make)
+```
 
+Now we are ready to run the launch file. This launches the vectornav node which will publish the data recived by the vectornav unit.
 
-Run:
-
-5. (Terminal 1) roscore
-6. (Terminal 2) roslaunch vectornav vectornav.launch
-7. (Terminal 3) rostopic list
-8. (Terminal 3) rostopic echo /vectornav/IMU
-9. (Terminal #) ctrl+c to quit
-
-
+```
+source devel/setup.bash
+roslaunch vectornav vn300.launch
+```
 
 Overview 
 --------
 
-#### vnpub node
+The code is launched from the file vn300.launch using the vn300 executable. The launch file uses several parameters such as USB port and frame_id. These parameters can be changed as desired. The code is written in C++ and uses the VectorNav C++ library. On top of this we have made the class VnRos wich is used to write data to the VectorNav unit and publish the recived data. The code is written for the vn300 model. It should also work for the other models, but there could be problems.
 
-This node provides a ROS interface for a vectornav device. It can be configured
-via ROS parameters and publishes sensor data via ROS topics.
+Known issues
+------------
 
+### crashes after a few seconds
+The code sometimes crashes on startup. This often happens the first time you run the code for the day and when you changes parameters such as serial_baud. The solution is to simply rerun it, then it should work.
 
-#### vectornav.launch
-
-This launch file contains the default parameters for connecting a device to ROS.
-You will problaby want to copy it into your own project and modify as required. 
-
+### crashes instanly
+This might be due to your user is not a part of the dailout group. Thus you don't have permission to communicate over USB. See setup section on how to solve this.
+If that doesn't work you could try
+```
+sudo chmod a+rw /dev/ttyUSB0
+```
+Note that this is not permanent so it need to be done each time you turn on your computer. Therefore i recommend the solution described in the setup section.
 
 References 
 ----------
+References used for this repository:
 
-[1]: http://www.vectornav.com/ "VectorNav"
-[2]: http://wiki.ros.org/ROS/Tutorials/InstallingandConfiguringROSEnvironment "ROS Workspace Tutorial"
-
+- http://www.vectornav.com/ "VectorNav"
+- https://github.com/dawonn/vectornav "orginal ROS interface"
 
 To do-list
 ===========
 
-- [ ] Add IMU topic
+- [x] Add IMU topic
 - [ ] Create function to set ENU flag
-- [ ] Implement antenna layout setting (`VnSensor::writeGpsAntennaOffset`, `VnSensor::writeGpsCompassBaseline`)
+- [x] Implement antenna layout setting (`VnSensor::writeGpsAntennaOffset`, `VnSensor::writeGpsCompassBaseline`)
 - [ ] TF + SLAM harmony
