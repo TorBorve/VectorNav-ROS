@@ -214,6 +214,7 @@ void VnRos::broadcastTf(const ros::TimerEvent& event){
     transform.header.stamp = event.current_real;
     transform.child_frame_id = params.frameId;
     transform.transform.translation = utilities::PointToVec3(odomMsg.pose.pose.position);
+    transform.transform.rotation = odomMsg.pose.pose.orientation;
     br.sendTransform(transform);
     return;
 }
