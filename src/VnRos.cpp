@@ -69,7 +69,7 @@ VnRos::VnRos(ros::NodeHandle* pn) : pn{pn} {
     insStatusPub = nh.advertise<vectornav::InsStatus>(ns + "/InsStatus", 100);
     tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
     
-    // fix invalid quaterinon [0, 0, 0, 0]
+    // fix invalid quaterinon = [0, 0, 0, 0]
     odomMsg.pose.pose.orientation.w = 1;
     odomMsg.child_frame_id = params.frameId;
     odomMsg.header.frame_id = params.mapFrameId;
@@ -213,13 +213,7 @@ void VnRos::broadcastTf(const ros::TimerEvent& event){
     transform.header.frame_id = params.mapFrameId;
     transform.header.stamp = event.current_real;
     transform.child_frame_id = params.frameId;
-    transform.transform.translation.x = odomMsg.pose.pose.position.x;
-    transform.transform.translation.y = odomMsg.pose.pose.position.y;
-    transform.transform.translation.z = odomMsg.pose.pose.position.z;
-    transform.transform.rotation.x = odomMsg.pose.pose.orientation.x;
-    transform.transform.rotation.y = odomMsg.pose.pose.orientation.y;
-    transform.transform.rotation.z = odomMsg.pose.pose.orientation.z;
-    transform.transform.rotation.w = odomMsg.pose.pose.orientation.w;
+    transform.transform.translation = utilities::PointToVec3(odomMsg.pose.pose.position);
     br.sendTransform(transform);
     return;
 }

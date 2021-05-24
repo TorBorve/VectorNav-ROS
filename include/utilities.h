@@ -74,5 +74,13 @@ inline geometry_msgs::Point toMsg(const vn::math::vec3d &rhs) {
     lhs.z = rhs[2];
     return lhs;
   }
+
+inline geometry_msgs::Vector3 PointToVec3(const geometry_msgs::Point& rhs){
+  geometry_msgs::Vector3 lhs;
+  lhs.x = rhs.x;
+  lhs.y = rhs.y;
+  lhs.z = rhs.z;
+  return lhs;
+}
   
 }
