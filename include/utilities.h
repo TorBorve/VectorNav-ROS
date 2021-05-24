@@ -82,5 +82,18 @@ inline geometry_msgs::Vector3 PointToVec3(const geometry_msgs::Point& rhs){
   lhs.z = rhs.z;
   return lhs;
 }
+
+template<std::size_t dim, typename T>
+vn::math::vec<dim, T> toVnVec(const std::vector<T>& vec)
+{
+  if (vec.size() != dim){
+    throw std::runtime_error("invalid length of vector");
+  }
+  vn::math::vec<dim, T> res;
+  for (unsigned int i = 0; i < vec.size(); i++){
+    res[i] = vec[i];
+  }
+  return res;
+}
   
 }

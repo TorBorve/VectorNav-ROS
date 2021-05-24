@@ -273,16 +273,10 @@ void VnRos::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& 
     // load vector parameters into tempVec
     vector<float> tempVec;
     pn->param("baseline", tempVec, {1, 0, 0});
-    ROS_ASSERT(tempVec.size() == 3);
-    baseline.position[0] = tempVec[0];
-    baseline.position[1] = tempVec[1];
-    baseline.position[2] = tempVec[2];
+    baseline.position = utilities::toVnVec<3>(tempVec);
 
     pn->param("antenna_offset", tempVec, {0, 0, 0});
-    ROS_ASSERT(tempVec.size() == 3);
-    antennaOffset[0] = tempVec[0];
-    antennaOffset[1] = tempVec[1];
-    antennaOffset[2] = tempVec[2];
+    antennaOffset = utilities::toVnVec<3>(tempVec);
     return;
 }
 
