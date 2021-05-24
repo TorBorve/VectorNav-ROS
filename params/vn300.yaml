@@ -9,9 +9,9 @@ serial_baud: 921600
 # Baud rate must be able to handle the data rate
 async_output_rate: 40
 
-# Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise)
+# Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise) vn300 has 400 hz imu
 # This value is used to set the serial data packet rate
-fixed_imu_rate: 800
+fixed_imu_rate: 400
 
 # Frame id to publish data in
 frame_id: vectornav
@@ -20,13 +20,13 @@ frame_id: vectornav
 map_frame_id: vectornav_map
 
 # Data publication form, true for East North Up or false for North East Down <- false is default setting
-ned_to_enu: true
+ned_to_enu: false
 
 # basline is the vector from antenna A to antenna B. This need to be in the ins refrence frame.
-baseline: [1.0, 0.0, 0.0]
+baseline: [-2.91, 0.55, 0.04]
 
 # Antenna offset is the vector from the ins to antenna A.
-antenna_offset: [0.0, 0.0, 0.0]
+antenna_offset: [1.56, 0.31, 0.07]
 # Make sure all covariances below are of type xx.xx , i.e. double so that the rpc is parsed correctly
 
 # Linear Acceleration Covariances not produced by the sensor

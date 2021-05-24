@@ -70,11 +70,11 @@ private:
     void writeSettings();
 
     /// @brief reads from private nodehandle into params given.
-    /// @param[in] asyncRate rate for async callback data
-    /// @param[in] imuRate rate for imu data?
-    /// @param[in] baseline vector from antenna A too B and uncertainty
-    /// @param[in] antannaOffset vector form sensor too antenna A
-    /// @param[in] baudRate baudrate for sensor
+    /// @param[in/out] asyncRate rate for async callback data
+    /// @param[in/out] imuRate rate for imu data
+    /// @param[in/out] baseline vector from antenna A too B and uncertainty
+    /// @param[in/out] antannaOffset vector form sensor too antenna A
+    /// @param[in/out] baudRate baudrate for sensor
     void getParams(int& asyncRate, int& imuRate, vn::sensors::GpsCompassBaselineRegister& baseline,
                     vn::math::vec3f& antennaOffset, int& baudRate);
 

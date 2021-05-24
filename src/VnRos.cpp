@@ -167,7 +167,7 @@ void VnRos::pubOdom(CompositeData& cd){
 
 void VnRos::pubImu(CompositeData& cd){
     // return if no subsribers
-    if (imuPub.getNumSubscribers() != 0 && cd.hasQuaternion()) 
+    if (cd.hasQuaternion()) 
         // && cd.hasAngularRate() && cd.hasAcceleration())
     {
         sensor_msgs::Imu imuMsg;
@@ -257,6 +257,12 @@ void VnRos::writeSettings(){
     // write antenna offset
     vnSensor.writeGpsAntennaOffset(antennaOffset);
     // write reference frame / mounting of sensor
+    // mat3f rotation = mat3f::identity();
+    // if (params.nedToEnu){
+    //     rotation = {0, 1, 0,
+    //                 1, 0, 0,
+    //                 0, 0, -1};
+    // }
     // vnSensor.writeReferenceFrameRotation(rotation);
     return;
 }
@@ -300,10 +306,12 @@ void VnRos::printSettings(){
     int sensorBaudRate = vnSensor.readSerialBaudRate();
     int asyncOutputRate = vnSensor.readAsyncDataOutputFrequency();
     GpsCompassBaselineRegister baseline = vnSensor.readGpsCompassBaseline();
+    mat3f rotation = vnSensor.readReferenceFrameRotation();
     vec3f antennaOffset = vnSensor.readGpsAntennaOffset();
     ss << "\tBaudrate: " << sensorBaudRate << ", Async rate: " << asyncOutputRate << endl;
     ss << "\tBaseline: " << str(baseline.position) << endl;
     ss << "\tAntenna offset: " << str(antennaOffset) << endl;
+    ss << "\tRefrence frame rotation: " << str(rotation) << endl;
     ROS_INFO("%s", ss.str().c_str());
     return;
 }
@@ -338,7 +346,7 @@ void VnRos::startupCallback(void* userData, Packet& p, size_t index){
             // changes too new callback function
             vnRos->vnSensor.unregisterAsyncPacketReceivedHandler();
             vnRos->vnSensor.registerAsyncPacketReceivedHandler(userData, VnRos::callback);
-            ROS_INFO("Changed callback function too vnRos::callback");
+            ROS_INFO("Changed callback function too VnRos::callback");
         };
     }
     return;
@@ -346,6 +354,8 @@ void VnRos::startupCallback(void* userData, Packet& p, size_t index){
 
 VnRos::~VnRos(){
     // check if sensor is connected
+
+    // might not be needed due to destructor of VnSenor.
     if (vnSensor.verifySensorConnectivity()){
         vnSensor.unregisterAsyncPacketReceivedHandler();
         ros::Duration(0.5).sleep();
