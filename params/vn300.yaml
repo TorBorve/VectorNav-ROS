@@ -19,6 +19,9 @@ frame_id: vectornav
 # Frame id for map / odom
 map_frame_id: vectornav_map
 
+# namespace for published topics. ns = vectornav => /vetornav/Odom, /vectornav/Imu...
+ns: vectornav
+
 # Data publication form, true for East North Up or false for North East Down <- false is default setting
 ned_to_enu: false
 
