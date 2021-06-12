@@ -275,6 +275,9 @@ void VnRos::getParams(int& asyncRate, int& imuRate, GpsCompassBaselineRegister& 
     pn->param("baseline", tempVec, {1, 0, 0});
     baseline.position = utilities::toVnVec<3>(tempVec);
 
+    pn->param("baseline_uncertainty", tempVec, {0.2, 0.2, 0.2});
+    baseline.uncertainty = utilities::toVnVec<3>(tempVec);
+
     pn->param("antenna_offset", tempVec, {0, 0, 0});
     antennaOffset = utilities::toVnVec<3>(tempVec);
     return;
@@ -299,6 +302,7 @@ void VnRos::printSettings(){
     vec3f antennaOffset = vnSensor.readGpsAntennaOffset();
     ss << "\tBaudrate: " << sensorBaudRate << ", Async rate: " << asyncOutputRate << endl;
     ss << "\tBaseline: " << str(baseline.position) << endl;
+    ss << "\tBaseline uncertainty: " << str(baseline.uncertainty) << endl;
     ss << "\tAntenna offset: " << str(antennaOffset) << endl;
     ss << "\tRefrence frame rotation: " << str(rotation) << endl;
     ROS_INFO("%s", ss.str().c_str());

@@ -25,11 +25,16 @@ ns: vectornav
 # Data publication form, true for East North Up or false for North East Down <- false is default setting
 ned_to_enu: false
 
-# basline is the vector from antenna A to antenna B. This need to be in the ins refrence frame.
-baseline: [-2.91, 0.55, 0.04]
+# baseline is the vector from antenna A to antenna B. This need to be in the ins refrence frame.
+baseline: [-2.91, -0.55, 0.04]
+
+# uncertainty in the measurement of the baseline. Vectornav recommends setting it equal to TWICE 
+# the worst case. 
+baseline_uncertainty: [0.1, 0.1, 0.1]
 
 # Antenna offset is the vector from the ins to antenna A.
 antenna_offset: [1.56, 0.31, 0.07]
+
 # Make sure all covariances below are of type xx.xx , i.e. double so that the rpc is parsed correctly
 
 # Linear Acceleration Covariances not produced by the sensor

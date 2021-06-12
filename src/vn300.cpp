@@ -31,8 +31,7 @@
 
 using namespace std;
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");
