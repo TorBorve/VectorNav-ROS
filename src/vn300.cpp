@@ -29,13 +29,11 @@
 
 #include "VnRos.h"
 
-using namespace std;
-
 int main(int argc, char *argv[]){
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");
-    VnRos vnRos{&pn};
+    vnRos::VnRos vnRos{&pn};
     vnRos.connect();
 
     ros::spin(); 
