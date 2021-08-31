@@ -1,6 +1,5 @@
 /// include ros interface files
 #include "VnRos.h"
-#include "matVecMult.h"
 #include "utilities.h"
 
 /// include standar C++ files
