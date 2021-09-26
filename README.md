@@ -16,7 +16,7 @@ First we need to make sure we have accses to the USB port wich the VectorNav uni
 To do this we need to add your user to the dailout group. This will give us permision to talk to the USB port. This is done by running:
 
 ```terminal
-sudo adduser "your username" dialout
+sudo adduser $USER dialout
 ```
 
 It is necesary to log out and in or restart your computer for the changes to take effect.
