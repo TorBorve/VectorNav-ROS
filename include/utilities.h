@@ -96,6 +96,26 @@ namespace utilities {
     }
     return res;
   }
-    
+
+}
+}
+
+namespace vn {
+namespace math {
+
+  template <size_t N, typename T>
+  inline bool operator==(const vn::math::vec<N, T>& lhs, const vn::math::vec<N, T>& rhs) {
+      bool equal = true;
+      for (unsigned int i = 0; (i < N) && equal; i++) {
+          equal = lhs[i] == rhs[i];
+      }
+      return equal;
+  }
+
+  template <size_t N, typename T>
+  inline bool operator!=(const vn::math::vec<N, T>& lhs, const vn::math::vec<N, T>& rhs) {
+      return !(lhs == rhs);
+  }
+
 }
 }
