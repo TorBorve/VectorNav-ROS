@@ -114,9 +114,7 @@ namespace vnRos {
         vnSensor.setResponseTimeoutMs(5000);
         vnSensor.setRetransmitDelayMs(200);
         try{
-            ROS_INFO("Writing");
             writeSettings();
-            ROS_INFO("printing");
             printSettings();
             ROS_INFO("Finished");
         } catch (std::exception& e){
@@ -144,7 +142,7 @@ namespace vnRos {
 
     void VnRos::pubOdom(vn::sensors::CompositeData& cd){
         odomMsg.header.stamp = ros::Time::now();
-        if (cd.hasPositionEstimatedEcef()){
+        if (cd.hasPositionEstimatedEcef() && (cd.positionEstimatedEcef() != vn::math::vec3d{0.0})){
             vn::math::vec3d pos = cd.positionEstimatedEcef();
 
             if (!initialPositonSet){
@@ -230,7 +228,6 @@ namespace vnRos {
         vn::sensors::GpsCompassBaselineRegister baseline;
         vn::math::vec3f antennaOffset;
         getParams(asyncOutputRate, sensorImuRate, baseline, antennaOffset, sensorBaudRate);
-        ROS_INFO("0");
         // write setting to sensor
         vnSensor.changeBaudRate(sensorBaudRate);
 
@@ -247,21 +244,17 @@ namespace vnRos {
             ATTITUDEGROUP_NONE | ATTITUDEGROUP_VPESTATUS | ATTITUDEGROUP_YPRU,
             INSGROUP_NONE | INSGROUP_POSECEF |INSGROUP_VELNED| INSGROUP_VELBODY ,
             GPSGROUP_NONE);
-        ROS_INFO("1");
         vnSensor.writeBinaryOutput1(bor);
         vn::xplat::Thread::sleepSec(1);
 
-        ROS_INFO("2");
         // write antenna offset
         vnSensor.writeGpsAntennaOffset(antennaOffset);
         vn::xplat::Thread::sleepSec(1);
 
-        ROS_INFO("3");
         // write baseline.
         vnSensor.writeGpsCompassBaseline(baseline);
         vn::xplat::Thread::sleepSec(1);
 
-        ROS_INFO("4");
         // Set Data output Freq [Hz]
         vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
         vn::xplat::Thread::sleepSec(1);
