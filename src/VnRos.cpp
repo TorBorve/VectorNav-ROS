@@ -141,6 +141,9 @@ namespace vnRos {
     }
 
     void VnRos::pubOdom(vn::sensors::CompositeData& cd){
+        if (odomPub.getNumSubscribers() == 0 ) {
+            return;
+        }
         odomMsg.header.stamp = ros::Time::now();
         if (cd.hasPositionEstimatedEcef() && (cd.positionEstimatedEcef() != vn::math::vec3d{0.0})){
             vn::math::vec3d pos = cd.positionEstimatedEcef();
@@ -169,7 +172,7 @@ namespace vnRos {
 
     void VnRos::pubImu(vn::sensors::CompositeData& cd){
         // return if no subsribers
-        if (cd.hasQuaternion()) 
+        if (cd.hasQuaternion() && imuPub.getNumSubscribers() != 0) 
             // && cd.hasAngularRate() && cd.hasAcceleration())
         {
             sensor_msgs::Imu imuMsg;
@@ -200,7 +203,7 @@ namespace vnRos {
     }
 
     void VnRos::pubStatus(vn::sensors::CompositeData& cd){
-        if (cd.hasInsStatus() && cd.hasQuaternion()){
+        if (cd.hasInsStatus() && cd.hasQuaternion() && insStatusPub.getNumSubscribers() != 0){
             utilities::InsStatus status{cd.insStatus()};
             vectornav::InsStatus statusMsg = utilities::toMsg(status);
             statusMsg.header.stamp = ros::Time::now();
