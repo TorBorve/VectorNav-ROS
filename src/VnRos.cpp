@@ -141,9 +141,6 @@ namespace vnRos {
     }
 
     void VnRos::pubOdom(vn::sensors::CompositeData& cd){
-        if (odomPub.getNumSubscribers() == 0 ) {
-            return;
-        }
         odomMsg.header.stamp = ros::Time::now();
         if (cd.hasPositionEstimatedEcef() && (cd.positionEstimatedEcef() != vn::math::vec3d{0.0})){
             vn::math::vec3d pos = cd.positionEstimatedEcef();
