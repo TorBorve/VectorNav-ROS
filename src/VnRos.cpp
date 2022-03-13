@@ -10,6 +10,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/Imu.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -64,6 +65,7 @@ namespace vnRos {
         odomPub = nh.advertise<nav_msgs::Odometry>(ns + "/Odom", 100);
         imuPub = nh.advertise<sensor_msgs::Imu>(ns + "/Imu", 100);
         insStatusPub = nh.advertise<vectornav::InsStatus>(ns + "/InsStatus", 100);
+        twistPub = nh.advertise<geometry_msgs::TwistStamped>(ns + "/twist", 100);
         tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
         
         // fix invalid quaterinon = [0, 0, 0, 0]
@@ -163,6 +165,10 @@ namespace vnRos {
         if (cd.hasAngularRate()){
             odomMsg.twist.twist.angular = utilities::toMsg(cd.angularRate());
         }
+        geometry_msgs::TwistStamped twist;
+        twist.header = odomMsg.header;
+        twist.twist = odomMsg.twist.twist;
+        twistPub.publish(twist);
         odomPub.publish(odomMsg);
         return;
     }
