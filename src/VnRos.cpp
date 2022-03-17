@@ -146,9 +146,12 @@ namespace vnRos {
         odomMsg.header.stamp = ros::Time::now();
         if (cd.hasPositionEstimatedEcef() && (cd.positionEstimatedEcef() != vn::math::vec3d{0.0})){
             vn::math::vec3d pos = cd.positionEstimatedEcef();
+            pos[2] = 0; // remove z value
 
             if (!initialPositonSet){
                 initialPositonSet = true;
+                vn::math::vec3d moholtPos = {2815.216, 518.865, 0};
+                vn::math::vec3d dragvollPos = {2814.901, 520.062, 0};
                 initialPosition = pos;
             }
             odomMsg.pose.pose.position = utilities::toMsg(pos - initialPosition);
