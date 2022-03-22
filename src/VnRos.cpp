@@ -156,7 +156,11 @@ namespace vnRos {
 
         if (cd.hasQuaternion()){
             vn::math::vec4f q = cd.quaternion();
-            tf2::Quaternion tf2_quat(q[1], q[0], -q[2], q[3]);
+            tf2::Quaternion tf2_quat(q[0],q[1],q[2],q[3]);
+            tf2::Quaternion q_rotate;
+            q_rotate.setRPY (0, 0, -M_PI);
+            // Apply the NED to ENU rotation such that the coordinate frame matches
+            tf2_quat = q_rotate*tf2_quat;
             odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
         }
         if (cd.hasVelocityEstimatedBody()){
@@ -182,7 +186,13 @@ namespace vnRos {
             imuMsg.header.frame_id = params.frameId;
             imuMsg.header.stamp = ros::Time::now();
             if (cd.hasQuaternion()){
-                imuMsg.orientation = utilities::toMsg(cd.quaternion());
+                vn::math::vec4f q = cd.quaternion();
+                tf2::Quaternion tf2_quat(q[0],q[1],q[2],q[3]);
+                tf2::Quaternion q_rotate;
+                q_rotate.setRPY (0, 0, -M_PI);
+                // Apply the NED to ENU rotation such that the coordinate frame matches
+                tf2_quat = q_rotate*tf2_quat;
+                imuMsg.orientation = tf2::toMsg(tf2_quat);
             }
             if (cd.hasAttitudeUncertainty()){
                 // large uncertainty on startup
