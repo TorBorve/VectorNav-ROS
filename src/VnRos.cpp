@@ -149,18 +149,27 @@ namespace vnRos {
             
             vn::math::vec3d enu = utilities::ecef2enu(posEcef);
             odomMsg.pose.pose.position = utilities::toMsg(enu);
+
+            vn::math::vec3d lla = cd.positionEstimatedLla(); //lat, lon, at
+            //ROS_INFO_STREAM(posEcef);
         }
 
         if (cd.hasQuaternion()){
             vn::math::vec4f q = cd.quaternion();
-            tf2::Quaternion tf2_quat(q[1], q[0], -q[2], q[3]);
+            tf2::Quaternion tf2_quat(q[0], -q[1], -q[2], q[3]);
             odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
         }
         if (cd.hasVelocityEstimatedBody()){
-            odomMsg.twist.twist.linear = utilities::toMsg(cd.velocityEstimatedBody());
+            vn::math::vec3f vel = cd.velocityEstimatedBody();
+            vel[1] = -vel[1];
+            vel[2] = -vel[2];
+            odomMsg.twist.twist.linear = utilities::toMsg(vel);
         }
         if (cd.hasAngularRate()){
-            odomMsg.twist.twist.angular = utilities::toMsg(cd.angularRate());
+            vn::math::vec3f ar = cd.angularRate();
+            ar[1] = -ar[1];
+            ar[2] = -ar[2];
+            odomMsg.twist.twist.angular = utilities::toMsg(ar);
         }
         geometry_msgs::TwistStamped twist;
         twist.header = odomMsg.header;
@@ -179,7 +188,9 @@ namespace vnRos {
             imuMsg.header.frame_id = params.frameId;
             imuMsg.header.stamp = ros::Time::now();
             if (cd.hasQuaternion()){
-                imuMsg.orientation = utilities::toMsg(cd.quaternion());
+                vn::math::vec4f q = cd.quaternion();
+                tf2::Quaternion tf2_quat(q[0], -q[1], -q[2], q[3]);
+                imuMsg.orientation = tf2::toMsg(tf2_quat);
             }
             if (cd.hasAttitudeUncertainty()){
                 // large uncertainty on startup
@@ -189,10 +200,16 @@ namespace vnRos {
                 imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
             }
             if (cd.hasAngularRate()){
-                imuMsg.angular_velocity = utilities::toMsg(cd.angularRate());
+                vn::math::vec3f ar = cd.angularRate();
+                ar[1] = -ar[1];
+                ar[2] = -ar[2];
+                imuMsg.angular_velocity = utilities::toMsg(ar);
             }
             if (cd.hasAcceleration()){
-                imuMsg.linear_acceleration = utilities::toMsg(cd.acceleration());
+                vn::math::vec3f accel = cd.acceleration();
+                accel[1] = -accel[1];
+                accel[2] = -accel[2];
+                imuMsg.linear_acceleration = utilities::toMsg(accel);
             }
 
             imuMsg.angular_velocity_covariance = params.angularVelCovariance;
@@ -245,7 +262,7 @@ namespace vnRos {
             IMUGROUP_NONE | IMUGROUP_ANGULARRATE | IMUGROUP_ACCEL,
             GPSGROUP_NONE,
             ATTITUDEGROUP_NONE | ATTITUDEGROUP_VPESTATUS | ATTITUDEGROUP_YPRU,
-            INSGROUP_NONE | INSGROUP_POSECEF |INSGROUP_VELNED| INSGROUP_VELBODY ,
+            INSGROUP_NONE | INSGROUP_POSECEF | INSGROUP_POSLLA |INSGROUP_VELNED| INSGROUP_VELBODY ,
             GPSGROUP_NONE);
         vnSensor.writeBinaryOutput1(bor);
         vn::xplat::Thread::sleepSec(1);
