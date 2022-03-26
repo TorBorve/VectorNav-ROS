@@ -97,6 +97,9 @@ namespace utilities {
     return res;
   }
 
+  /// @brief convert ecef position to enu position with z = 0
+  vn::math::vec3d ecef2enu(const vn::math::vec3d& pos);
+
 }
 }
 
