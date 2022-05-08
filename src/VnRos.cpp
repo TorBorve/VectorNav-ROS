@@ -152,11 +152,16 @@ namespace vnRos {
 
             vn::math::vec3d lla = cd.positionEstimatedLla(); //lat, lon, at
             //ROS_INFO_STREAM(posEcef);
+            //ROS_INFO_STREAM(lla);
         }
 
         if (cd.hasQuaternion()){
             vn::math::vec4f q = cd.quaternion();
             tf2::Quaternion tf2_quat(q[0], -q[1], -q[2], q[3]);
+
+            tf2::Quaternion rot;
+            rot.setRPY(0, 0, M_PI / 2);
+            tf2_quat = tf2_quat * rot;
             odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
         }
         if (cd.hasVelocityEstimatedBody()){

@@ -25,9 +25,9 @@ namespace utilities {
     }
 
     vn::math::vec3d ecef2enu(const vn::math::vec3d& pos) {
-        vn::math::vec3d dragvollPos = {2814909, 520090, 5680577};
-        constexpr double phi = 63.409936*M_PI/180; // lat
-        constexpr double lambda = 10.468069*M_PI/180; // lon
+        vn::math::vec3d dragvollPos = {2.81436e6, 518433, 5.68116e6};
+        constexpr double phi = 63.419*M_PI/180; // lat
+        constexpr double lambda = 10.4375*M_PI/180; // lon
 
         constexpr double sin_lam = sin(lambda);
         constexpr double cos_lam = cos(lambda);
