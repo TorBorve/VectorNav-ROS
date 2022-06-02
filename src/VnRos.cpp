@@ -10,6 +10,7 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/Imu.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -64,6 +65,7 @@ namespace vnRos {
         odomPub = nh.advertise<nav_msgs::Odometry>(ns + "/Odom", 100);
         imuPub = nh.advertise<sensor_msgs::Imu>(ns + "/Imu", 100);
         insStatusPub = nh.advertise<vectornav::InsStatus>(ns + "/InsStatus", 100);
+        twistPub = nh.advertise<geometry_msgs::TwistStamped>(ns + "/twist", 100);
         tfTimer = nh.createTimer(ros::Duration(1.0/asyncOutputRate), &VnRos::broadcastTf, this);
         
         // fix invalid quaterinon = [0, 0, 0, 0]
@@ -143,40 +145,57 @@ namespace vnRos {
     void VnRos::pubOdom(vn::sensors::CompositeData& cd){
         odomMsg.header.stamp = ros::Time::now();
         if (cd.hasPositionEstimatedEcef() && (cd.positionEstimatedEcef() != vn::math::vec3d{0.0})){
-            vn::math::vec3d pos = cd.positionEstimatedEcef();
+            vn::math::vec3d posEcef = cd.positionEstimatedEcef();
+            
+            vn::math::vec3d enu = utilities::ecef2enu(posEcef);
+            odomMsg.pose.pose.position = utilities::toMsg(enu);
 
-            if (!initialPositonSet){
-                initialPositonSet = true;
-                initialPosition = pos;
-            }
-            odomMsg.pose.pose.position = utilities::toMsg(pos - initialPosition);
+            vn::math::vec3d lla = cd.positionEstimatedLla(); //lat, lon, at
+            //ROS_INFO_STREAM(posEcef);
+            //ROS_INFO_STREAM(lla);
         }
 
         if (cd.hasQuaternion()){
             vn::math::vec4f q = cd.quaternion();
-            tf2::Quaternion tf2_quat(q[1], q[0], -q[2], q[3]);
+            tf2::Quaternion tf2_quat(q[0], -q[1], -q[2], q[3]);
+
+            tf2::Quaternion rot;
+            rot.setRPY(0, 0, M_PI / 2);
+            tf2_quat = tf2_quat * rot;
             odomMsg.pose.pose.orientation = tf2::toMsg(tf2_quat);
         }
         if (cd.hasVelocityEstimatedBody()){
-            odomMsg.twist.twist.linear = utilities::toMsg(cd.velocityEstimatedBody());
+            vn::math::vec3f vel = cd.velocityEstimatedBody();
+            vel[1] = -vel[1];
+            vel[2] = -vel[2];
+            odomMsg.twist.twist.linear = utilities::toMsg(vel);
         }
         if (cd.hasAngularRate()){
-            odomMsg.twist.twist.angular = utilities::toMsg(cd.angularRate());
+            vn::math::vec3f ar = cd.angularRate();
+            ar[1] = -ar[1];
+            ar[2] = -ar[2];
+            odomMsg.twist.twist.angular = utilities::toMsg(ar);
         }
+        geometry_msgs::TwistStamped twist;
+        twist.header = odomMsg.header;
+        twist.twist = odomMsg.twist.twist;
+        twistPub.publish(twist);
         odomPub.publish(odomMsg);
         return;
     }
 
     void VnRos::pubImu(vn::sensors::CompositeData& cd){
         // return if no subsribers
-        if (cd.hasQuaternion()) 
+        if (cd.hasQuaternion() && imuPub.getNumSubscribers() != 0) 
             // && cd.hasAngularRate() && cd.hasAcceleration())
         {
             sensor_msgs::Imu imuMsg;
             imuMsg.header.frame_id = params.frameId;
             imuMsg.header.stamp = ros::Time::now();
             if (cd.hasQuaternion()){
-                imuMsg.orientation = utilities::toMsg(cd.quaternion());
+                vn::math::vec4f q = cd.quaternion();
+                tf2::Quaternion tf2_quat(q[0], -q[1], -q[2], q[3]);
+                imuMsg.orientation = tf2::toMsg(tf2_quat);
             }
             if (cd.hasAttitudeUncertainty()){
                 // large uncertainty on startup
@@ -186,10 +205,16 @@ namespace vnRos {
                 imuMsg.orientation_covariance[8] = orientationStdDev[0]*orientationStdDev[0]*M_PI/180; // Convert to radians Yaw
             }
             if (cd.hasAngularRate()){
-                imuMsg.angular_velocity = utilities::toMsg(cd.angularRate());
+                vn::math::vec3f ar = cd.angularRate();
+                ar[1] = -ar[1];
+                ar[2] = -ar[2];
+                imuMsg.angular_velocity = utilities::toMsg(ar);
             }
             if (cd.hasAcceleration()){
-                imuMsg.linear_acceleration = utilities::toMsg(cd.acceleration());
+                vn::math::vec3f accel = cd.acceleration();
+                accel[1] = -accel[1];
+                accel[2] = -accel[2];
+                imuMsg.linear_acceleration = utilities::toMsg(accel);
             }
 
             imuMsg.angular_velocity_covariance = params.angularVelCovariance;
@@ -200,7 +225,7 @@ namespace vnRos {
     }
 
     void VnRos::pubStatus(vn::sensors::CompositeData& cd){
-        if (cd.hasInsStatus() && cd.hasQuaternion()){
+        if (cd.hasInsStatus() && cd.hasQuaternion() && insStatusPub.getNumSubscribers() != 0){
             utilities::InsStatus status{cd.insStatus()};
             vectornav::InsStatus statusMsg = utilities::toMsg(status);
             statusMsg.header.stamp = ros::Time::now();
@@ -239,10 +264,10 @@ namespace vnRos {
             COMMONGROUP_TIMESTARTUP | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_QUATERNION |
             COMMONGROUP_INSSTATUS | COMMONGROUP_VELOCITY,	// Note use of binary OR to configure flags.
             TIMEGROUP_NONE | TIMEGROUP_TIMESTARTUP,
-            IMUGROUP_NONE | IMUGROUP_ANGULARRATE | IMUGROUP_UNCOMPACCEL,
+            IMUGROUP_NONE | IMUGROUP_ANGULARRATE | IMUGROUP_ACCEL,
             GPSGROUP_NONE,
             ATTITUDEGROUP_NONE | ATTITUDEGROUP_VPESTATUS | ATTITUDEGROUP_YPRU,
-            INSGROUP_NONE | INSGROUP_POSECEF |INSGROUP_VELNED| INSGROUP_VELBODY ,
+            INSGROUP_NONE | INSGROUP_POSECEF | INSGROUP_POSLLA |INSGROUP_VELNED| INSGROUP_VELBODY ,
             GPSGROUP_NONE);
         vnSensor.writeBinaryOutput1(bor);
         vn::xplat::Thread::sleepSec(1);

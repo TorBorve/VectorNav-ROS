@@ -98,6 +98,9 @@ namespace vnRos {
         /// @brief publisher for ins status
         ros::Publisher insStatusPub;
 
+        /// @brief publisher for twist
+        ros::Publisher twistPub;
+
         /// @brief parameters for VnRos
         VnParams params;
         

@@ -33,6 +33,7 @@ int main(int argc, char *argv[]){
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");
+
     vnRos::VnRos vnRos{&pn};
     vnRos.connect();
 

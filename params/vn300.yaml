@@ -14,10 +14,10 @@ async_output_rate: 40
 fixed_imu_rate: 400
 
 # Frame id to publish data in
-frame_id: vectornav
+frame_id: base_link
 
 # Frame id for map / odom
-map_frame_id: vectornav_map
+map_frame_id: odom
 
 # namespace for published topics. ns = vectornav => /vetornav/Odom, /vectornav/Imu...
 ns: vectornav
