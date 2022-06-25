@@ -284,11 +284,9 @@ void VnRos::writeSettings() {
         INSGROUP_NONE | INSGROUP_POSECEF | INSGROUP_POSLLA | INSGROUP_VELNED | INSGROUP_VELBODY,
         GPSGROUP_NONE);
     vnSensor.writeBinaryOutput1(bor);
-    vn::xplat::Thread::sleepSec(1);
 
     // write antenna offset
     vnSensor.writeGpsAntennaOffset(antennaOffset);
-    vn::xplat::Thread::sleepSec(1);
 
     // check if uncertainties are small enough
     double maxUncertainty = 0.025 * baseline.position.mag();
@@ -299,11 +297,9 @@ void VnRos::writeSettings() {
     }
     // write baseline.
     vnSensor.writeGpsCompassBaseline(baseline);
-    vn::xplat::Thread::sleepSec(1);
 
     // Set Data output Freq [Hz]
     vnSensor.writeAsyncDataOutputFrequency(asyncOutputRate);
-    vn::xplat::Thread::sleepSec(1);
     // write reference frame / mounting of sensor
     // mat3f rotation = mat3f::identity();
     // if (params.nedToEnu){
@@ -368,9 +364,6 @@ void VnRos::disconnect() {
 }
 
 void VnRos::startupCallback(void* userData, vn::protocol::uart::Packet& p, size_t index) {
-    // static variables for printing status to console
-    static const ros::Duration printPeriod{5};
-    static ros::Time lastPrint = ros::Time::now() - printPeriod;
 
     VnRos* vnRos = static_cast<VnRos*>(userData);
     auto cd = vn::sensors::CompositeData::parse(p);
@@ -381,11 +374,8 @@ void VnRos::startupCallback(void* userData, vn::protocol::uart::Packet& p, size_
         utilities::InsStatus status{cd.insStatus()};
 
         // check if it is time for printing
-        if (ros::Duration{ros::Time::now() - lastPrint} >= printPeriod) {
-            ROS_INFO_STREAM(status);
-            ROS_INFO_STREAM(std::bitset<16>(cd.insStatus()));
-            lastPrint = ros::Time::now();
-        }
+        ROS_INFO_STREAM_THROTTLE(5, status);
+        ROS_INFO_STREAM_THROTTLE(5, std::bitset<16>(cd.insStatus()));
         // check if startup is complete.
         if (status.isOk()) {
             // changes too new callback function
@@ -402,12 +392,7 @@ VnRos::~VnRos() {
 
     // might not be needed due to destructor of VnSenor.
     if (vnSensor.verifySensorConnectivity()) {
-        vnSensor.unregisterAsyncPacketReceivedHandler();
-        ros::Duration(0.5).sleep();
-        ROS_INFO("Unregisted the Packet Received Handler");
-        vnSensor.disconnect();
-        ros::Duration(0.5).sleep();
-        ROS_INFO("%s is disconnected successfully", vnSensor.readModelNumber().c_str());
+        disconnect();
     }
 }
 

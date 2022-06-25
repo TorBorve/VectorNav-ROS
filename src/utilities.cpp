@@ -29,9 +29,13 @@ vn::math::vec3d ecef2enu(const vn::math::vec3d& pos) {
     // vn::math::vec3d dragvollPos = {2.81453e+06, 516524, 5.68105e+06};
     // constexpr double phi = 63.42 * M_PI / 180.0;
     // constexpr double lambda = 10.3992 * M_PI / 180.0;
-    vn::math::vec3d dragvollPos = {3142576.652179022785276, 341592.127677080105059, 5521194.435504955239594};
-    constexpr double phi = 60.372931647959632 * M_PI / 180.0;
-    constexpr double lambda = 6.203586811060537 * M_PI / 180.0;
+    // vn::math::vec3d dragvollPos = {3142576.652179022785276, 341592.127677080105059, 5521194.435504955239594};
+    // constexpr double phi = 60.372931647959632 * M_PI / 180.0;
+    // constexpr double lambda = 6.203586811060537 * M_PI / 180.0;
+    // dragvoll
+    vn::math::vec3d dragvollPos = {2814951.475899695884436, 520074.705294987827074, 5680776.838449714705348};
+    constexpr double phi = 63.410422786252234 * M_PI / 180.0;
+    constexpr double lambda = 10.467612050214127 * M_PI / 180.0;
 
     constexpr double sin_lam = sin(lambda);
     constexpr double cos_lam = cos(lambda);
