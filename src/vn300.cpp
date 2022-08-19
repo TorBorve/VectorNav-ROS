@@ -23,13 +23,13 @@
  *
  */
 
-#include <iostream>
-
 #include <ros/ros.h>
+
+#include <iostream>
 
 #include "VnRos.h"
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]) {
     // ROS node init
     ros::init(argc, argv, "vectornav");
     ros::NodeHandle pn("~");
@@ -37,6 +37,6 @@ int main(int argc, char *argv[]){
     vnRos::VnRos vnRos{&pn};
     vnRos.connect();
 
-    ros::spin(); 
+    ros::spin();
     return 0;
 }
